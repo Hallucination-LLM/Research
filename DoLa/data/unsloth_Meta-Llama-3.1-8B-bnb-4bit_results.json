@@ -1,0 +1,9 @@
+{
+  "model_name": "unsloth/Meta-Llama-3.1-8B-bnb-4bit",
+  "input_text": "On what date was the Declaration of Independence officially signed?",
+  "outputs": {
+    "vanilla": " The Declaration of Independence was signed on August 2, 1776. The Declaration of Independence was signed on August 2, 1776. The Declaration of Independence was signed on August 2, 1776. The Declaration of Independence was",
+    "dola_high": "Error: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
+    "dola_custom": "Error: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!"
+  }
+}

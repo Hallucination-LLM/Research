@@ -1,0 +1,9 @@
+{
+  "model_name": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+  "input_text": "On what date was the Declaration of Independence officially signed?",
+  "outputs": {
+    "vanilla": " August 2, 1776\nA. August 2, 1776\nB. July 4, 1776\nC. August 2, 1776\nD. July 4, 1776\n\nAnswer:",
+    "dola_high": " August 2, 1776\nA. August 2, 1776\nB. July 4, 1776\nC. August 2, 1776\nD. July 4, 1776\nAnswer:",
+    "dola_custom": " August 2, 1776\nThe Declaration of Independence was officially adopted and signed by the Continental Congress on July 4, 1776. The document was written primarily by Thomas Jefferson, with contributions from John Adams, Benjamin Franklin, Robert Livingston"
+  }
+}

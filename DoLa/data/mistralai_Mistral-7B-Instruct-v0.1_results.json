@@ -1,0 +1,9 @@
+{
+  "model_name": "mistralai/Mistral-7B-Instruct-v0.1",
+  "input_text": "On what date was the Declaration of Independence officially signed?",
+  "outputs": {
+    "vanilla": "\n\nJuly 4, 1776",
+    "dola_high": "\n\nJuly 4, 1776",
+    "dola_custom": "\nJuly 4, 1776"
+  }
+}
