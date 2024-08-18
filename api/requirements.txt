@@ -1,0 +1,15 @@
+pydantic==2.8.2
+fastapi==0.112.1
+uvicorn==0.30.6
+numpy==1.26.4
+torch==2.3.0
+transformers==4.44.0
+flask==3.0.3
+colorama==0.4.6
+unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git
+# unsloth[cu121-torch230] @ git+https://github.com/unslothai/unsloth.git
+trl==0.8.6
+peft==0.12.0
+accelerate==0.33
+bitsandbytes==0.43.3
+xformers==0.0.26.post1
