@@ -3,7 +3,7 @@
   "input_text": "On what date was the Declaration of Independence officially signed?",
   "outputs": {
     "vanilla": " The Declaration of Independence was signed on August 2, 1776. The Declaration of Independence was signed on August 2, 1776. The Declaration of Independence was signed on August 2, 1776. The Declaration of Independence was",
-    "dola_high": "Error: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!",
-    "dola_custom": "Error: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!"
+    "dola_high": " On July 4, 1776, the Continental Congress adopted the Declaration of Independence, a historic document asserting America\u2019s independence from Great Britain. More than two months had passed since Thomas Jefferson wrote the first draft of the Declaration, on June 28",
+    "dola_custom": " The answer is July 4, 1776. But the truth is the document was not actually signed by the delegates to the Second Continental Congress on that day.\nThe Declaration of Independence was written in June, 1776, and the Second Continental"
   }
 }
