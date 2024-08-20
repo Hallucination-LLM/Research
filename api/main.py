@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Clean up
-    await app.state.ai_service.on_shutdown()
+    await app.state.ai_processing_service.on_shutdown()
 
 
 app = FastAPI(lifespan=lifespan)
