@@ -5,6 +5,7 @@ from unsloth import FastLanguageModel
 from config import LOGGER_LEVEL
 from transformers import TextIteratorStreamer
 from threading import Thread
+from transformers import BitsAndBytesConfig
 
 logger = logging.getLogger(__name__)
 logger.setLevel(LOGGER_LEVEL)
@@ -14,33 +15,42 @@ def load_model(
     max_seq_length: int = 8192,
     load_in_4bit: bool = True,
     device: str = 'cuda:0',
+    dtype: torch.dtype = torch.float16,
     use_unsloth: bool = False
     ):
     model, tokenizer = None, None
 
     if use_unsloth:
         logger.info(f"Using unsloth library")
+
         model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=model_id,
-        max_seq_length=max_seq_length,
-        dtype=None,
-        device_map={"": device},
-        load_in_4bit=load_in_4bit
+            model_name=model_id,
+            max_seq_length=max_seq_length,
+            dtype=None,
+            device_map={"": device},
+            load_in_4bit=load_in_4bit
         )
 
         FastLanguageModel.for_inference(model)
 
     else:
+
         logger.info(f"Using transformers library")
+
+        # quantization_config = BitsAndBytesConfig(
+        #     load_in_4bit=load_in_4bit,
+        #     bnb_4bit_compute_dtype=torch.float16
+        # ) if load_in_4bit else None
+
         tokenizer = transformers.AutoTokenizer.from_pretrained(model_id)
         model = transformers.AutoModelForCausalLM.from_pretrained(
             model_id,
-            torch_dtype=torch.float16 if load_in_4bit else torch.float32,
-            )
-
+            device_map={"": device},
+            torch_dtype=torch.float16,
+            # quantization_config=quantization_config
+        )
 
         model.eval()
-
 
     return model, tokenizer
         

@@ -58,31 +58,31 @@ class AIProcessingService:
 
         is_hallucination = self.detector.predict(hidden_states.to(torch.float32))
         logger.info(f"{is_hallucination = }")
-        return DetectHalluResponse(input=request.user_input, hallucination=is_hallucination)
+        return DetectHalluResponse(user_input=request.user_input, hallucination=is_hallucination)
     
     async def generate(self, request: RequestModel):
             
-            prompt = prepare_prompt(self.tokenizer, request.input, "")
-            logger.info(f"{prompt = }")
-    
-            text_streamer = get_text_streamer(
-                tokenizer=self.tokenizer,
-                skip_prompt=True
-            )
-    
-            text_streamer = get_local_llms_response(
-                model=self.llm,
-                tokenizer=self.tokenizer,
-                text_streamer=text_streamer,
-                prompt=prompt,
-                max_new_tokens=2048,
-                temperature=0.0,
-                device=self.device,
-                dola=request.use_dola
-            )
-            
-            generated_text = "".join([text for text in text_streamer])
-            return ResponseModel(message=f"Generated content: {generated_text}")
+        prompt = prepare_prompt(self.tokenizer, request.user_input, "")
+        logger.info(f"{prompt = }")
+
+        text_streamer = get_text_streamer(
+            tokenizer=self.tokenizer,
+            skip_prompt=True
+        )
+
+        text_streamer = get_local_llms_response(
+            model=self.llm,
+            tokenizer=self.tokenizer,
+            text_streamer=text_streamer,
+            prompt=prompt,
+            max_new_tokens=2048,
+            temperature=0.0,
+            device=self.device,
+            dola=request.use_dola
+        )
+        
+        generated_text = "".join([text for text in text_streamer])
+        return ResponseModel(message=f"Generated content: {generated_text}")
     
 async def get_ai_processing_service(request: Request) -> AIProcessingService:
     return request.app.state.ai_processing_service

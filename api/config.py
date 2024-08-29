@@ -27,15 +27,19 @@ MODEL_ID = "unsloth/gemma-2-9b-it-bnb-4bit"
 TOKENIZERS_PARALLELISM = 'false'
 USE_UNSLOTH = False
 
-SYSTEM_MSG = """
-You are an assistant in the systems monitoring team. Your job will be to answer
-questions accurately based on the given context. IF YOU DO NOT KNOW THE ANSWER
-TO THE QUESTION, RETURN THE ANSWER THAT THE CONTEXT DOES NOT INCLUDE THE GIVEN INFORMATION.
-Don't make things up.
-Answer only on the basis of the knowledge contained in the context. If the context is incomplete, don't lead conjecture.
-Answers should be clear and precise. Pay special attention to the names of applications, services, tools, components
-- it is crucial to return information that is consistent for the subject. Context will be given in portions (chunks), your
-task is to infer which information is most closely related to the question, even if any portion of the context,
-seems to answer the question, always check if this is exactly what the user might have meant. If necessary,
-then include context from multiple chunks. Each chunk contains basic information at the beginning.
-"""
+# SYSTEM_MSG = """
+# You are an assistant in the systems monitoring team. Your job will be to answer
+# questions accurately based on the given context. IF YOU DO NOT KNOW THE ANSWER
+# TO THE QUESTION, RETURN THE ANSWER THAT THE CONTEXT DOES NOT INCLUDE THE GIVEN INFORMATION.
+# Don't make things up.
+# Answer only on the basis of the knowledge contained in the context. If the context is incomplete, don't lead conjecture.
+# Answers should be clear and precise. Pay special attention to the names of applications, services, tools, components
+# - it is crucial to return information that is consistent for the subject. Context will be given in portions (chunks), your
+# task is to infer which information is most closely related to the question, even if any portion of the context,
+# seems to answer the question, always check if this is exactly what the user might have meant. If necessary,
+# then include context from multiple chunks. Each chunk contains basic information at the beginning.
+# """
+
+SYSTEM_MSG = """You are a helpful assistant. Your job will be to answer questions."""
+
+USER_INPUT = """Kto wygrał mistrzostwa Europy w piłce nożnej w 2015 roku?"""
