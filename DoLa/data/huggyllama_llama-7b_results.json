@@ -1,0 +1,9 @@
+{
+  "model_name": "huggyllama/llama-7b",
+  "input_text": "On what date was the Declaration of Independence officially signed?",
+  "outputs": {
+    "vanilla": "\nThe Declaration of Independence was signed on July 4, 1776.\nWhat was the date of the signing of the Declaration of Independence?\nThe Declaration of Independence was signed on July 4,",
+    "dola_high": "\nJuly 4, 1776, when the Continental Congress voted to separate from Great Britain. The 56 delegates to the Continental Congress signed the Declaration on August 2, 1776.",
+    "dola_custom": "\nIt was officially signed on 2 August 1776, when 56 members of the Second Continental Congress, representing the original 13 American colonies, voted unanimously for the resolution for independence. The 2"
+  }
+}

@@ -2,3 +2,12 @@
 *.pyc
 __pycache__
 test_gemma_resp.csv
+*__pycache__*
+*.pyc
+*.pt
+*.npy
+*.csv
+
+
+data
+data2

@@ -1,0 +1,9 @@
+{
+  "model_name": "google/gemma-2-2b-it",
+  "input_text": "On what date was the Declaration of Independence officially signed?",
+  "outputs": {
+    "vanilla": "\n\nThe Declaration of Independence was adopted on **July 4, 1776**.  \n\nHowever, it wasn't officially signed until **August 2, 1776**. \n",
+    "dola_high": "\n\n**Answer:**  **July 4, 1776** \n\n\nHowever, it's important to remember: \n* **The Declaration was adopted on July 4th.** The Continental Congress voted on July 4th",
+    "dola_custom": "Error: stack expects a non-empty TensorList"
+  }
+}
