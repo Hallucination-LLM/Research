@@ -7,6 +7,8 @@ test_gemma_resp.csv
 *.pt
 *.npy
 *.csv
+Lookback-Lens
+Lookback-Lens/ll_data
 
 
 data
