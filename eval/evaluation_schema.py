@@ -10,17 +10,28 @@ class DataType(str, Enum):
     def __str__(self):
         return self.value
 
-class HallucinationAnswer(str, Enum):
+class IsAnswerCorrect(str, Enum):
     YES = "YES"
     NO = "NO"
 
 class HallucinationSchema(BaseModel):
-    answer: HallucinationAnswer
+    answer: IsAnswerCorrect
 
 class ProblematicSpan(BaseModel):
     span: str
 
 class EvaluationResult(BaseModel):
-    decision: HallucinationAnswer
+    decision: IsAnswerCorrect
     explanation: str
     problematic_spans: List[ProblematicSpan] = Field(default_factory=list)
+
+class OutputData(BaseModel):
+    index: int
+    document: str
+    ground_truth: str
+    response: str
+    decision: IsAnswerCorrect
+    gpt4_explanation: str
+    problematic_spans: List[str]
+    cost: float
+    prompt: str
