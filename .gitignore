@@ -13,3 +13,5 @@ Lookback-Lens/ll_data
 
 data
 data2
+hidden_states/
+checkpoints/
