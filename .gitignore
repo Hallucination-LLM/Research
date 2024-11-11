@@ -5,6 +5,7 @@ test_gemma_resp.csv
 *__pycache__*
 *.pyc
 *.pt
+*.pkl
 *.npy
 *.csv
 Lookback-Lens
