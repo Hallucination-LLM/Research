@@ -7,11 +7,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_dola", action='store_true', default=False)
     parser.add_argument("--fewshot", action='store_true', default=False)
-    parser.add_argument("--device_num", type=int, default=0)
+    parser.add_argument("--device_num", type=str, default='auto')
     parser.add_argument("--start", type=int, default=0)
     parser.add_argument("--end", type=int, default=None)
     parser.add_argument("--checkpoint_file", type=str, default=None)
     parser.add_argument("--exp_name", type=str, default=None)
+    parser.add_argument("--return_dict_in_gen", action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -22,16 +23,22 @@ if __name__ == '__main__':
     DEVICE_NUM = args.device_num
     CHECKPOINT_FILE = args.checkpoint_file
     EXP_NAME = args.exp_name
+    RETURN_DICT_IN_GEN = args.return_dict_in_gen
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = f"{DEVICE_NUM}"
+    if DEVICE_NUM != 'auto':
+        os.environ["CUDA_VISIBLE_DEVICES"] = f"{DEVICE_NUM}"
+
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
     from golemai.nlp.llm_resp_gen import LLMRespGen
     from golemai.nlp.prompts import SYSTEM_MSG_RAG, QUERY_INTRO_NO_ANS, QUERY_INTRO_FEWSHOT
+    import torch
 
     DATA_DIR = 'data'
-    DS_NAME = 'test_gemma_resp.csv'
+    DS_NAME = 'test_gemma_resp_dola.parquet'
 
-    df = pd.read_csv(os.path.join("..", DATA_DIR, DS_NAME))
+    df = pd.read_parquet(os.path.join("..", DATA_DIR, DS_NAME))
 
     llm_rg = LLMRespGen(
         df=df,
@@ -48,18 +55,19 @@ if __name__ == '__main__':
             checkpoint_path=os.path.join("checkpoints", CHECKPOINT_FILE)
         )
 
-    llm_rg.load_llm(use_unsloth=False)
+    llm_rg.load_llm(use_unsloth=False, dtype=torch.float16)
 
     llm_rg.set_generation_config(
         model_id=llm_rg.model_id,
         **{
-            "max_new_tokens": 200,
-            "temperature": 0.0,
-            # "do_sample": False,
+            "max_new_tokens": 100,
+            # "temperature": 0.0,
+            "do_sample": False,
             "use_cache": True,
-            "return_dict_in_generate": True,
+            # "cache_implementation": None,
+            "return_dict_in_generate": RETURN_DICT_IN_GEN,
             "output_attentions": True,
-            "output_hidden_states": True,
+            "output_hidden_states": False,
         },
         dola_layers="high" if DOLA else None,
         repetition_penalty=1.2 if DOLA else 1.0
@@ -71,7 +79,9 @@ if __name__ == '__main__':
         eval_run_name=EXP_NAME,
         prompt_columns=['query', 'context'],
         row_start=START,
-        row_end=END
+        row_end=END,
+        max_prompt_length_col='context_length',
+        max_prompt_length=3500
     )
 
 # for i in range(0, 1):
