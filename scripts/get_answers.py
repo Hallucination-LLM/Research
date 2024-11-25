@@ -25,25 +25,32 @@ if __name__ == '__main__':
     EXP_NAME = args.exp_name
     RETURN_DICT_IN_GEN = args.return_dict_in_gen
 
+    MODEL_ID = 'gemma-2-9b-it-bnb-4bit'
+
     if DEVICE_NUM != 'auto':
         os.environ["CUDA_VISIBLE_DEVICES"] = f"{DEVICE_NUM}"
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
+    from dotenv import load_dotenv
     from golemai.nlp.llm_resp_gen import LLMRespGen
-    from golemai.nlp.prompts import SYSTEM_MSG_RAG, QUERY_INTRO_NO_ANS, QUERY_INTRO_FEWSHOT
+    from golemai.nlp.prompts import SYSTEM_MSG_RAG_SHORT, QUERY_INTRO_NO_ANS, QUERY_INTRO_FEWSHOT, PROMPT_QA
+    from golemai.nlp.llm_evaluator import LLMEvaluator
+    from datetime import datetime
     import torch
 
-    DATA_DIR = 'data'
-    DS_NAME = 'test_gemma_resp_dola.parquet'
+    load_dotenv()
 
-    df = pd.read_parquet(os.path.join("..", DATA_DIR, DS_NAME))
+    DATA_DIR = 'data'
+    DS_NAME = 'new_version_sample_1500_filtered.parquet'
+
+    df = pd.read_parquet(os.path.join("..", DATA_DIR, DS_NAME)).reset_index(drop=True)
 
     llm_rg = LLMRespGen(
         df=df,
         model_type='local',
-        system_msg=SYSTEM_MSG_RAG,
+        system_msg=SYSTEM_MSG_RAG_SHORT,
         prompt_template=QUERY_INTRO_NO_ANS if not FEWSHOT else QUERY_INTRO_FEWSHOT,
         batch_size=1,
         device_num=DEVICE_NUM
@@ -55,12 +62,12 @@ if __name__ == '__main__':
             checkpoint_path=os.path.join("checkpoints", CHECKPOINT_FILE)
         )
 
-    llm_rg.load_llm(use_unsloth=False, dtype=torch.float16)
+    llm_rg.load_llm(use_unsloth=False, dtype=torch.bfloat16)
 
     llm_rg.set_generation_config(
         model_id=llm_rg.model_id,
         **{
-            "max_new_tokens": 100,
+            "max_new_tokens": 200,
             # "temperature": 0.0,
             "do_sample": False,
             "use_cache": True,
@@ -80,11 +87,46 @@ if __name__ == '__main__':
         prompt_columns=['query', 'context'],
         row_start=START,
         row_end=END,
-        max_prompt_length_col='context_length',
-        max_prompt_length=3500
+        # max_prompt_length_col='context_length',
+        # max_prompt_length=3500
     )
 
-# for i in range(0, 1):
-#     print(resps['model_responses'][i].split('\nmodel\n')[-1].strip())
-#     print(df.iloc[i]['gemma-2-9b-it-bnb-4bit'].strip())
-#     print('\n\n')
+    print(resps['model_responses'])
+
+
+    df = df[df.index.isin(int(i) for i in resps['model_responses'].keys())]
+
+    model_resps = resps['model_responses']
+    model_resps = {int(k): v for k, v in model_resps.items()}
+    df[MODEL_ID] = df.index.map(model_resps)
+
+    print(df.head())
+
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    evaluator = LLMEvaluator(
+        model_type="openai",
+        api_url="https://api.openai.com/v1/",
+        api_key=api_key,
+        system_msg="You are a helpful assistant.",
+        prompt_template=PROMPT_QA,
+        has_system_role=True,
+        use_pydantic=False,
+        result_path = 'sample_dataset_eval_results.json'
+    ).set_generation_config(
+        model_id="gpt-4o-mini-2024-07-18",
+    )
+
+    COLUMNS_TO_EVAL = [
+        MODEL_ID 
+    ]
+
+    for column in COLUMNS_TO_EVAL:
+
+        responses = df.reset_index()[['index', column]]
+        responses.columns = ['index', 'answer']
+
+        evaluator.result_path = f'{column}_{datetime.now().strftime("%Y-%m-%d_%H-%M")}.json'
+        results, total_cost, accuracy = evaluator.evaluate_from_dfs(
+            df, responses
+        )
