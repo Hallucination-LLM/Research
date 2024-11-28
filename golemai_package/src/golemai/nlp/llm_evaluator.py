@@ -60,20 +60,28 @@ class LLMEvaluator(LLMRespGen):
         return result, cost, prompt
 
     def evaluate_from_dfs(self, gt_df, response_df, limit=None):
+
         gt_data = self._prepare_gt_data(gt_df, limit)
         done_results = self._load_done_results()
         total_cost, correct_count, results = 0, 0, []
 
         with open(self.result_path, 'a') as fw:
-            for idx in tqdm(response_df['index'].head(limit) if limit else response_df['index'],
+
+            for idx in tqdm(response_df[self.id_col].head(limit) if limit else response_df[self.id_col],
                             desc="Evaluating responses"):
+                
                 if idx not in gt_data or idx in done_results:
                     results.append(done_results.get(idx, {}))
                     continue
 
+                response = response_df.loc[response_df[self.id_col] == idx, 'answer'].values[0]
+
+                if response == "<SKIPPED>":
+                    results.append({})
+                    continue
+
                 document = gt_data[idx]['context']
                 gt_response = gt_data[idx]['net_response']
-                response = response_df.loc[response_df['index'] == idx, 'answer'].values[0]
 
                 result, cost, prompt = self.evaluate_response(document, gt_response, response, )
 
@@ -133,11 +141,11 @@ class LLMEvaluator(LLMRespGen):
         data = gt_df.head(limit) if limit else gt_df
 
         return {
-            idx: {
+            entry[self.id_col]: {
                 'context': f"#Document#: {entry['context']}\n#Question#: {entry['question'].capitalize()}",
                 'net_response': entry['answer']
             }
-            for idx, entry in data.iterrows()
+            for _, entry in data.iterrows()
         }
 
     def _load_done_results(self):
@@ -146,12 +154,12 @@ class LLMEvaluator(LLMRespGen):
             with open(self.result_path, 'r') as fr:
                 for line in fr:
                     data = json.loads(line)
-                    done_dict[data['index']] = data
+                    done_dict[data[self.id_col]] = data
         return done_dict
 
     def _record_result(self, idx, document, gt_response, response, result, cost, prompt):
         return {
-            'index': idx,
+            self.id_col: idx,
             'document': document.strip(),
             'ground_truth': gt_response.strip(),
             'response': response,

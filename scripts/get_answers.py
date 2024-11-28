@@ -97,20 +97,17 @@ if __name__ == '__main__':
         max_prompt_length=3996
     )
 
-    print(resps['model_responses'])
+    resps = resps['model_responses']
+   
+    llm_rg.df = llm_rg.df.loc[llm_rg.df['id'].isin(list(resps.keys()))]
+    llm_rg.df[MODEL_ID] = llm_rg.df['id'].map(resps)
 
-
-    df = df[df.index.isin(int(i) for i in resps['model_responses'].keys())]
-
-    model_resps = resps['model_responses']
-    model_resps = {int(k): v for k, v in model_resps.items()}
-    df[MODEL_ID] = df.index.map(model_resps)
-
-    print(df.head())
+    llm_rg.df = llm_rg.df.rename(columns={'query': 'question'})
 
     api_key = os.getenv("OPENAI_API_KEY")
 
     evaluator = LLMEvaluator(
+        id_col='id',
         model_type="openai",
         api_url="https://api.openai.com/v1/",
         api_key=api_key,
@@ -120,19 +117,13 @@ if __name__ == '__main__':
         use_pydantic=False,
         result_path = 'sample_dataset_eval_results.json'
     ).set_generation_config(
-        model_id="gpt-4o-mini-2024-07-18",
+        model_id="gpt-4o",
     )
 
-    COLUMNS_TO_EVAL = [
-        MODEL_ID 
-    ]
+    responses = llm_rg.df[['id', MODEL_ID]]
+    responses.columns = ['id', 'answer']
 
-    for column in COLUMNS_TO_EVAL:
-
-        responses = df.reset_index()[['index', column]]
-        responses.columns = ['index', 'answer']
-
-        evaluator.result_path = f'{column}_{datetime.now().strftime("%Y-%m-%d_%H-%M")}.json'
-        results, total_cost, accuracy = evaluator.evaluate_from_dfs(
-            df, responses
-        )
+    evaluator.result_path = f'{MODEL_ID}_{datetime.now().strftime("%Y-%m-%d_%H-%M")}.json'
+    results, total_cost, accuracy = evaluator.evaluate_from_dfs(
+        llm_rg.df, responses
+    )
