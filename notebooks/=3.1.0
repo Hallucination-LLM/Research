@@ -1,0 +1,2 @@
+Requirement already satisfied: jinja2 in /home/pim/miniconda3/envs/hallu/lib/python3.10/site-packages (3.1.0)
+Requirement already satisfied: MarkupSafe>=2.0 in /home/pim/miniconda3/envs/hallu/lib/python3.10/site-packages (from jinja2) (2.1.3)

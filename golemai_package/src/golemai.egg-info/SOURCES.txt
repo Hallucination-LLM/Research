@@ -6,12 +6,6 @@ src/golemai.egg-info/PKG-INFO
 src/golemai.egg-info/SOURCES.txt
 src/golemai.egg-info/dependency_links.txt
 src/golemai.egg-info/top_level.txt
-src/golemai/data_generator/__init__.py
-src/golemai/data_generator/custom_entity_generator.py
-src/golemai/data_generator/generator_class.py
-src/golemai/data_generator/supported_entities_enum.py
-src/golemai/data_generator/template_handler.py
-src/golemai/data_generator/utils.py
 src/golemai/dataset/__init__.py
 src/golemai/dataset/dataset_ops.py
 src/golemai/dl/__init__.py
@@ -31,10 +25,10 @@ src/golemai/ner/json_schema_gen.py
 src/golemai/ner/ner_predictors.py
 src/golemai/nlp/__init__.py
 src/golemai/nlp/embeddings.py
-src/golemai/nlp/eval_resp.py
 src/golemai/nlp/evaluation_schema.py
 src/golemai/nlp/generate_embeddings.py
 src/golemai/nlp/gpu_ops.py
+src/golemai/nlp/llm_evaluator.py
 src/golemai/nlp/llm_module.py
 src/golemai/nlp/llm_resp_gen.py
 src/golemai/nlp/prompts.py

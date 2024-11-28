@@ -75,10 +75,12 @@ class LLMRespGen:
         generation_config (dict, optional): Configuration for generating responses.
         _prefix_funcs (dict): Dictionary of prefix functions.
         model_responses (list, optional): List of model responses.
+        att_hidden_config (dict, optional): Configuration for attention and hidden states gathering.
     """
     
     def __init__(
         self,
+        id_col: str,
         df: Optional[pd.DataFrame] = None,
         model_type: Literal["local", "api", "openai"] = "api",
         api_url: Optional[str] = None,
@@ -146,6 +148,8 @@ class LLMRespGen:
         self._prefix_funcs = {}
 
         self.model_responses = None
+        self.att_hidden_config = {}
+        self.id_col = id_col
 
     def _set_model_type(
         self, model_type: Literal["local", "api", "openai"]
@@ -440,7 +444,7 @@ class LLMRespGen:
         self,
         checkpoint_path: str = None,
         checkpoint_time_format: str = "%Y-%m-%d_%H-%M-%S",
-        checkpoint_freq: int = 25,
+        checkpoint_freq: int = 5,
     ) -> None:
         """
         Configures the checkpoint settings for the model.
@@ -509,13 +513,7 @@ class LLMRespGen:
             logger.debug(f"Loading checkpoint from {self.checkpoint_path}")
             model_responses = load_json(self.checkpoint_path)
             row_start = max(
-                max(
-                    [
-                        int(k)
-                        for k in model_responses.get(model_response_col).keys()
-                    ]
-                )
-                + 1,
+                self.df.loc[self.df[self.id_col] == list(model_responses.get(model_response_col).keys())[-1]].index[0] + 1,
                 row_start,
             )
             logger.debug(f"Starting from row {row_start}")
@@ -755,9 +753,32 @@ class LLMRespGen:
             if isinstance(llm_responses, (str))
             else llm_responses
         )
+    
+    def configure_att_hidden_config(
+        self,
+        take_only_generated: bool = True,
+        prompt_offset: int = 0,
+    ) -> None:
+        """
+        Sets the configuration for processing attention weights and hidden states.
+        Args:
+            take_only_generated (bool): Whether to take only the generated tokens. Defaults to True.
+            prompt_offset (int): The offset for taking tokens from the prompt. Defaults to 0.
+        Returns:
+            None
+        """
+
+        logger.debug(f"configure_att_hidden_config: {take_only_generated = }, {prompt_offset = }")
+        self.att_hidden_config = {
+            "take_only_generated": take_only_generated,
+            "prompt_offset": prompt_offset,
+        }
+
+        return None
 
     def _process_hidden_or_att(
-        self, x: Tuple[Tuple[torch.Tensor]]
+        self,
+        x,
     ) -> np.ndarray:
         """
         Processes hidden states or attention weights from a tuple of tensors.
@@ -771,35 +792,53 @@ class LLMRespGen:
         """
 
         n_generated_tokens = len(x) - 1
+
+        n_layers = self.llm.config.num_hidden_layers
+        n_heads = self.llm.config.num_attention_heads
+
         n_prompt_tokens = x[0][0].shape[-2]
+
+        print(f"n_prompt_tokens: {n_prompt_tokens}, n_generated_tokens: {n_generated_tokens}")
 
         num_all_tokens = n_prompt_tokens + n_generated_tokens
 
-        return np.concatenate(
-            [
-                np.stack(
-                    tuple(
-                        [
-                            t.detach().cpu().to(torch.float16).numpy().squeeze()
-                            for t in token_att
-                        ]
-                    ),
-                    axis=0,
-                )[..., :num_all_tokens]
-                if i == 0
-                else np.stack(
-                    tuple(
-                        [
-                            t.detach().cpu().to(torch.float16).numpy().squeeze()
-                            for t in token_att
-                        ]
-                    ),
-                    axis=0,
-                )[..., :num_all_tokens][..., np.newaxis, :]
-                for i, token_att in enumerate(x)
-            ],
-            axis=-2,
-        )
+        prompt_offset = self.att_hidden_config.get("prompt_offset", 0)
+        take_only_generated = self.att_hidden_config.get("take_only_generated", True)
+
+        init_matrix = np.zeros(shape=(
+            n_layers, 
+            n_heads,
+            num_all_tokens, 
+            num_all_tokens), 
+        dtype=np.float16)
+
+        for i, t in enumerate(x[0]):
+            init_matrix[i, :, :n_prompt_tokens, :] = t.detach().cpu().to(torch.float16).numpy().squeeze()[..., :num_all_tokens]
+
+        for i, token_att in enumerate(x[1:], start=0):
+            for j, t in enumerate(token_att):
+                init_matrix[j, :, n_prompt_tokens + i, :] = t.detach().cpu().to(torch.float16).numpy().squeeze()[..., :num_all_tokens]
+
+        return init_matrix[:, :, (max(n_prompt_tokens - prompt_offset, 0)) if take_only_generated else 0:, :]
+
+
+        # return np.concatenate(
+        #     (
+        #         first_init_matrix,
+        #         np.stack(
+        #             tuple(
+        #                 [
+        #                     t.detach().cpu().to(torch.float16).numpy().squeeze()
+        #                     for t in token_att
+        #                 ]
+        #             ),
+        #             axis=0,
+        #         )[..., :num_all_tokens][..., np.newaxis, :]
+        #         for i, token_att in enumerate(x[1:])
+        #     ),
+        #     axis=-2,
+        # )
+
 
     def _process_df(
         self,
@@ -810,7 +849,7 @@ class LLMRespGen:
         row_end: int = None,
         eval_run_name: Optional[str] = None,
         max_prompt_length: Optional[int] = None,
-        max_prompt_length_col: Optional[str] = None,
+        max_prompt_length_col: Optional[str] = None
     ) -> None:
         """
         Processes a DataFrame to generate model responses in batches.
@@ -833,11 +872,13 @@ class LLMRespGen:
             eval_run_name (Optional[str]): The name of the evaluation run.
             max_prompt_length (Optional[int]): The maximum allowed length for prompts.
             max_prompt_length_col (Optional[str]): The name of the column containing prompt lengths.
+            row_id_col (Optional[str]): The name of the column containing row IDs.
         Returns:
             None
         """
 
         batch_input = []
+        batch_ids = []
         json_schemas = []
 
         eval_start_time = perf_counter()
@@ -847,6 +888,8 @@ class LLMRespGen:
             total=(row_end if row_end is not None else len(self.df))
             - row_start,
         ):
+            
+            id_ = row[self.id_col]
 
             prompt = self._get_ready_prompt(
                 row=row,
@@ -858,12 +901,15 @@ class LLMRespGen:
                 max_prompt_length is not None
             ):
                 if row[max_prompt_length_col] > max_prompt_length:
+
                     logger.warning(
                         f"Skipping row {i} due to prompt length > {max_prompt_length}"
                     )
+                    self.model_responses["model_responses"][id_] = "<SKIPPED>"
                     continue
 
             batch_input.append(prompt)
+            batch_ids.append(id_)
 
             if json_schema_col is not None:
                 json_schemas.append(row[json_schema_col])
@@ -906,9 +952,14 @@ class LLMRespGen:
                         if output.attentions is not None:
 
                             try:
+
+                                start = perf_counter()
                                 output.attentions = self._process_hidden_or_att(
                                     output.attentions
                                 )
+                                end = perf_counter()
+                                print(f"Time taken to process attentions: {end - start:.3f} seconds")
+
                             except Exception as e:
                                 logger.error(
                                     f"Error processing attentions: {e}"
@@ -922,11 +973,11 @@ class LLMRespGen:
                                     os.makedirs(att_dir)
 
                                 try:
-
+                                    
                                     save_numpy(
                                         output.attentions,
                                         file_path=os.path.join(
-                                            att_dir, f"{i}.npy"
+                                            att_dir, f"{id_}.npy"
                                         ),
                                     )
 
@@ -959,25 +1010,26 @@ class LLMRespGen:
                                     os.makedirs(hs_dir)
 
                             try:
-
+                                
                                 save_numpy(
                                     output.hidden_states,
-                                    file_path=os.path.join(hs_dir, f"{i}.npy"),
+                                    file_path=os.path.join(hs_dir, f"{id_}.npy"),
                                 )
 
                             except Exception as e:
                                 logger.error(f"Error saving hidden states: {e}")
 
-                for j, response in enumerate(llm_responses):
-                    index = i - len(batch_input) + j + 1
+                for idx, response in zip(batch_ids, llm_responses):
+                    # index = i - len(batch_input) + j + 1
                     self.model_responses["model_responses"][
-                        index
+                        idx
                     ] = response.split("\nmodel\n")[-1].strip()
 
                 del batch_input
                 torch.cuda.empty_cache()
 
                 batch_input = []
+                batch_ids = []
 
             if ((i % self.checkpoint_freq == 0) and (i > 0)) or (end_cond):
 
@@ -1014,6 +1066,7 @@ class LLMRespGen:
             row_end (int): Ending row index for processing. Defaults to None.
             max_prompt_length_col (str): Column name for maximum prompt length. Defaults to None.
             max_prompt_length (int): Maximum length of the prompt. Defaults to None.
+            row_id_col (str): Column name for the index. Defaults to None.
         Returns:
             dict: A dictionary containing the generated responses.
         Raises:
@@ -1039,13 +1092,14 @@ class LLMRespGen:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
+        eval_run_name = self._get_run_name(
+            eval_run_name=eval_run_name, row_start=row_start, row_end=row_end
+        )
+        
         row_start, row_end = self._load_checkpoint(
             row_start=row_start, row_end=row_end
         )
 
-        eval_run_name = self._get_run_name(
-            eval_run_name=eval_run_name, row_start=row_start, row_end=row_end
-        )
 
         if self.generation_config is None:
             logger.warning("Generation config not set. Setting default config.")
@@ -1063,7 +1117,7 @@ class LLMRespGen:
             row_end=row_end,
             eval_run_name=eval_run_name,
             max_prompt_length_col=max_prompt_length_col,
-            max_prompt_length=max_prompt_length,
+            max_prompt_length=max_prompt_length
         )
 
 

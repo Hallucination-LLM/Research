@@ -43,12 +43,13 @@ if __name__ == '__main__':
     load_dotenv()
 
     DATA_DIR = 'data'
-    DS_NAME = 'new_version_sample_1500_filtered.parquet'
+    DS_NAME = 'new_version_rest_sample.parquet'
 
     df = pd.read_parquet(os.path.join("..", DATA_DIR, DS_NAME)).reset_index(drop=True)
 
     llm_rg = LLMRespGen(
         df=df,
+        id_col='id',
         model_type='local',
         system_msg=SYSTEM_MSG_RAG_SHORT,
         prompt_template=QUERY_INTRO_NO_ANS if not FEWSHOT else QUERY_INTRO_FEWSHOT,
@@ -80,6 +81,11 @@ if __name__ == '__main__':
         repetition_penalty=1.2 if DOLA else 1.0
     )
 
+    llm_rg.configure_att_hidden_config(
+        prompt_offset=8,
+        take_only_generated=True
+    )
+
     llm_rg.df = llm_rg.df.rename(columns={'question': 'query'})
 
     resps = llm_rg.get_responses(
@@ -87,8 +93,8 @@ if __name__ == '__main__':
         prompt_columns=['query', 'context'],
         row_start=START,
         row_end=END,
-        # max_prompt_length_col='context_length',
-        # max_prompt_length=3500
+        max_prompt_length_col='context_length',
+        max_prompt_length=3996
     )
 
     print(resps['model_responses'])
