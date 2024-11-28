@@ -1,0 +1,5 @@
+setup.py
+golemai.egg-info/PKG-INFO
+golemai.egg-info/SOURCES.txt
+golemai.egg-info/dependency_links.txt
+golemai.egg-info/top_level.txt

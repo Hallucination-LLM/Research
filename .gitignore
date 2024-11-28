@@ -21,3 +21,4 @@ checkpoints/
 
 /.idea
 .env
+secrets/storage-gcp-key.json

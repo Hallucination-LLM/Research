@@ -1,0 +1,31 @@
+from setuptools import find_packages, setup
+
+setup(
+    name="golemai",
+    version="0.1",
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+    # install_requires=[
+    #     "numpy==1.26.4",
+    #     "pandas==2.1.3",
+    #     "pydantic==2.8.2",
+    #     "colorama==0.4.6",
+    #     "python-dotenv==1.0.1",
+    #     "httpx==0.24.1",
+    #     "pypdf==4.3.0",
+    #     "python-magic==0.4.27",
+    #     "torch==2.2.2",
+    #     "scikit-learn==1.5.1",
+    #     "Faker==28.0.0",
+    #     "num2words==0.5.13",
+    #     "mlflow==2.14.3",
+    #     "fastparquet==2024.5.0",
+    #     "pyarrow==15.0.2",
+    #     "PyYAML==6.0.2",
+    #     "rsa==4.9",
+    #     "rapidfuzz==3.9.6",
+    #     "transformers==4.44.2",
+    #     "lm-format-enforcer==0.10.6",
+    #     "openai==1.43.0",
+    # ],
+)
