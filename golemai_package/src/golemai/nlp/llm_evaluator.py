@@ -13,6 +13,7 @@ from golemai.nlp.evaluation_schema import (
 from golemai.nlp.llm_resp_gen import LLMRespGen
 from golemai.nlp.prompts import PROMPT_QA
 from tqdm import tqdm
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
@@ -58,6 +59,26 @@ class LLMEvaluator(LLMRespGen):
         logger.debug("Problematic spans: %s", result.problematic_spans)
 
         return result, cost, prompt
+    
+    def evaluate(self, df, exp_name, responses, limit=None):
+        df = df.loc[df['id'].isin(list(responses.keys()))]
+        df[exp_name] = df['id'].map(responses)
+
+        df = df.rename(columns={'query': 'question'})
+
+
+        responses = df[['id', exp_name]]
+        responses.columns = ['id', 'answer']
+
+        self.result_path = f'{exp_name}_{datetime.now().strftime("%Y-%m-%d_%H-%M")}.json'
+        results, total_cost, accuracy = self.evaluate_from_dfs(
+            df, responses
+        )
+        
+        print(f"Total Cost: {total_cost}")
+        print(f"Accuracy: {accuracy}")
+
+        return results, total_cost, accuracy
 
     def evaluate_from_dfs(self, gt_df, response_df, limit=None):
 

@@ -43,7 +43,7 @@ if __name__ == '__main__':
     load_dotenv()
 
     DATA_DIR = 'data'
-    DS_NAME = 'new_version_rest_sample.parquet'
+    DS_NAME = 'data_filtered_sample_1500.parquet'
 
     df = pd.read_parquet(os.path.join("..", DATA_DIR, DS_NAME)).reset_index(drop=True)
 
@@ -98,11 +98,6 @@ if __name__ == '__main__':
     )
 
     resps = resps['model_responses']
-   
-    llm_rg.df = llm_rg.df.loc[llm_rg.df['id'].isin(list(resps.keys()))]
-    llm_rg.df[MODEL_ID] = llm_rg.df['id'].map(resps)
-
-    llm_rg.df = llm_rg.df.rename(columns={'query': 'question'})
 
     api_key = os.getenv("OPENAI_API_KEY")
 
@@ -115,15 +110,13 @@ if __name__ == '__main__':
         prompt_template=PROMPT_QA,
         has_system_role=True,
         use_pydantic=False,
-        result_path = 'sample_dataset_eval_results.json'
     ).set_generation_config(
         model_id="gpt-4o",
     )
 
-    responses = llm_rg.df[['id', MODEL_ID]]
-    responses.columns = ['id', 'answer']
 
-    evaluator.result_path = f'{MODEL_ID}_{datetime.now().strftime("%Y-%m-%d_%H-%M")}.json'
-    results, total_cost, accuracy = evaluator.evaluate_from_dfs(
-        llm_rg.df, responses
+    evaluator.evaluate(
+        df=df,
+        exp_name=EXP_NAME if EXP_NAME is not None else f'{MODEL_ID}_eval_{datetime.now().strftime("%Y-%m-%d_%H-%M")}',
+        responses=resps,
     )
