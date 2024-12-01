@@ -76,7 +76,7 @@ class LLMEvaluator(LLMRespGen):
 
                 response = response_df.loc[response_df[self.id_col] == idx, 'answer'].values[0]
 
-                if response == "<SKIPPED>":
+                if response in ["<SKIPPED>", "<CUDA_ERROR>"]:
                     results.append({})
                     continue
 
