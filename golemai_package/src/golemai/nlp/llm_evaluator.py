@@ -61,19 +61,26 @@ class LLMEvaluator(LLMRespGen):
         return result, cost, prompt
     
     def evaluate(self, df, exp_name, responses, limit=None):
-        df = df.loc[df['id'].isin(list(responses.keys()))]
-        df[exp_name] = df['id'].map(responses)
+        df_eval = df.copy()
+        df_eval = df_eval.loc[df_eval[self.id_col].isin(list(responses.keys()))]
+        df_eval[exp_name] = df_eval[self.id_col].map(responses)
 
-        df = df.rename(columns={'query': 'question'})
+        df_eval = df_eval.rename(columns={'query': 'question'})
 
 
-        responses = df[['id', exp_name]]
-        responses.columns = ['id', 'answer']
+        responses = df_eval[[self.id_col, exp_name]]
+        responses.columns = [self.id_col, 'answer']
 
-        self.result_path = f'{exp_name}_{datetime.now().strftime("%Y-%m-%d_%H-%M")}.json'
+        self.result_path = f'{exp_name}.json'
         results, total_cost, accuracy = self.evaluate_from_dfs(
-            df, responses
+            df_eval, responses
         )
+
+        result_df = pd.DataFrame(results)
+        result_df = result_df[[self.id_col, 'decision', 'problematic_spans', 'gpt4_explanation']]
+
+        df = df.merge(result_df, on=self.id_col, how='left')
+        df.to_parquet(f'{exp_name}.parquet')
         
         print(f"Total Cost: {total_cost}")
         print(f"Accuracy: {accuracy}")
@@ -142,7 +149,7 @@ class LLMEvaluator(LLMRespGen):
                 spans_text = spans_text.split('**')[0].strip()
             # Safely parse the list of spans
             try:
-                problematic_spans = [span.strip() for span in spans_text.strip('[]').split(',')]
+                problematic_spans = [span.strip() for span in spans_text.strip('[]""').split(',')]
             except Exception as e:
                 logger.error(f"Error parsing problematic spans: {e}")
 
