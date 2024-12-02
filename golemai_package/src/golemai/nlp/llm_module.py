@@ -132,7 +132,7 @@ def prepare_prompt(
     if has_system_role:
         messages.append({"role": "system", "content": system_input})
 
-    messages = [
+    messages.append(
         {
             "role": "user",
             "content": (
@@ -140,8 +140,8 @@ def prepare_prompt(
                 if not has_system_role
                 else user_input
             ),
-        },
-    ]
+        }
+    )
 
     prompt = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
