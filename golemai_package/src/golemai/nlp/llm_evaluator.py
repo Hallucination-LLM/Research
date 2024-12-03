@@ -77,15 +77,14 @@ class LLMEvaluator(LLMRespGen):
         )
 
         result_df = pd.DataFrame(results)
-        result_df = result_df[[self.id_col, 'decision', 'problematic_spans', 'gpt4_explanation']]
-
+        result_df = result_df[[self.id_col, 'model_response', 'decision', 'problematic_spans']]
 
         filename = f'{exp_name}.parquet'
         df = df.merge(result_df, on=self.id_col, how='right')
 
         if os.path.exists(filename):
             df_exist = pd.read_parquet(filename)
-            df = pd.concat([df_exist, df])
+            df = pd.concat([df_exist, df]).reset_index(drop=True)
             df = df.drop_duplicates(subset=self.id_col)
 
         df.to_parquet(filename)
@@ -198,7 +197,7 @@ class LLMEvaluator(LLMRespGen):
             self.id_col: idx,
             'document': document.strip(),
             'ground_truth': gt_response.strip(),
-            'response': response,
+            'model_response': response,
             'decision': result.decision,
             'gpt4_explanation': result.explanation,
             'problematic_spans': result.problematic_spans if not self.use_pydantic else [span.span for span in
