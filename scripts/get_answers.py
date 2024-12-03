@@ -35,6 +35,7 @@ if __name__ == '__main__':
 
     from dotenv import load_dotenv
     from golemai.nlp.llm_resp_gen import LLMRespGen
+    from golemai.nlp.hallucination_extractor import HallucinationDatasetExtractor
     from golemai.nlp.prompts import SYSTEM_MSG_RAG_SHORT, QUERY_INTRO_NO_ANS, QUERY_INTRO_FEWSHOT, PROMPT_QA
     from golemai.nlp.llm_evaluator import LLMEvaluator
     from datetime import datetime
@@ -43,7 +44,7 @@ if __name__ == '__main__':
     load_dotenv()
 
     DATA_DIR = 'data'
-    DS_NAME = 'new_version_sample_1500_filtered.parquet'
+    DS_NAME = 'new_version_merged_df.parquet'
 
     df = pd.read_parquet(os.path.join("..", DATA_DIR, DS_NAME)).reset_index(drop=True)
 
@@ -118,8 +119,27 @@ if __name__ == '__main__':
     )
 
 
-    evaluator.evaluate(
+    df = evaluator.evaluate(
         df=df,
         exp_name=EXP_NAME if EXP_NAME is not None else f'{MODEL_ID}_eval_{datetime.now().strftime("%Y-%m-%d_%H-%M")}',
         responses=resps,
+    )
+
+    print(df.head())
+
+    hallu_ext = HallucinationDatasetExtractor(
+        df=df,
+        llm_rg=llm_rg,
+        att_dir_path=os.path.join(EXP_NAME, 'attentions'),
+    )
+
+    df = hallu_ext.prepare_hallucinated_df_info(exp_name=EXP_NAME)
+    print(df.head())
+
+    hallu_df = hallu_ext.create_attension_dataset(
+        examined_span_type='context',
+        skip_first_n_tokens=8,
+        n_first_tokens=8,
+        window_size=0,
+        exp_name=EXP_NAME
     )

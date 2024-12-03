@@ -532,6 +532,7 @@ class LLMRespGen:
     def _save_checkpoint(
         self,
         eval_run_name: str,
+        checkpoint_run_name: str,
         eval_start_time: float,
         last_checkpoint: bool = False,
     ) -> None:
@@ -557,8 +558,9 @@ class LLMRespGen:
             if self.checkpoint_path is not None
             else os.path.join(
                 ".",
+                eval_run_name,
                 "checkpoints",
-                f"{eval_run_name}_{'checkpoint' if not last_checkpoint else timestamp}.json",
+                f"{checkpoint_run_name}_{'checkpoint' if not last_checkpoint else timestamp}.json",
             )
         )
 
@@ -892,6 +894,13 @@ class LLMRespGen:
 
         eval_start_time = perf_counter()
 
+        if not os.path.exists(eval_run_name):
+            os.makedirs(eval_run_name)
+
+        checkpoint_eval_run_name = self._get_run_name(
+            eval_run_name=eval_run_name, row_start=row_start, row_end=row_end
+        )
+
         for i, row in tqdm(
             self.df.iloc[slice(row_start, row_end)].iterrows(),
             total=(row_end if row_end is not None else len(self.df))
@@ -1041,6 +1050,7 @@ class LLMRespGen:
 
                 self._save_checkpoint(
                     eval_run_name=eval_run_name,
+                    checkpoint_run_name=checkpoint_eval_run_name,
                     eval_start_time=eval_start_time,
                     last_checkpoint=end_cond,
                 )
@@ -1097,10 +1107,6 @@ class LLMRespGen:
             )
             logger.error(error_msg)
             raise ValueError(error_msg)
-
-        eval_run_name = self._get_run_name(
-            eval_run_name=eval_run_name, row_start=row_start, row_end=row_end
-        )
         
         row_start, row_end = self._load_checkpoint(
             row_start=row_start, row_end=row_end

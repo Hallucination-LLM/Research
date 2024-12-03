@@ -5,6 +5,7 @@ from collections import namedtuple
 
 import pandas as pd
 import tiktoken
+import ast
 from golemai.nlp.evaluation_schema import (
     DataType,
     EvaluationResult,
@@ -71,7 +72,7 @@ class LLMEvaluator(LLMRespGen):
         responses = df_eval[[self.id_col, exp_name]]
         responses.columns = [self.id_col, 'answer']
 
-        self.result_path = f'{exp_name}.json'
+        self.result_path = os.path.join(exp_name, f'evaluated.json')
         results, total_cost, accuracy = self.evaluate_from_dfs(
             df_eval, responses
         )
@@ -79,7 +80,7 @@ class LLMEvaluator(LLMRespGen):
         result_df = pd.DataFrame(results)
         result_df = result_df[[self.id_col, 'model_response', 'decision', 'problematic_spans']]
 
-        filename = f'{exp_name}.parquet'
+        filename = os.path.join(exp_name, f'evaluated_df.parquet')
         df = df.merge(result_df, on=self.id_col, how='right')
 
         if os.path.exists(filename):
@@ -92,7 +93,7 @@ class LLMEvaluator(LLMRespGen):
         print(f"Total Cost: {total_cost}")
         print(f"Accuracy: {accuracy}")
 
-        return results, total_cost, accuracy
+        return df
 
     def evaluate_from_dfs(self, gt_df, response_df, limit=None):
 
@@ -156,7 +157,7 @@ class LLMEvaluator(LLMRespGen):
                 spans_text = spans_text.split('**')[0].strip()
             # Safely parse the list of spans
             try:
-                problematic_spans = [span.strip() for span in spans_text.strip('[]""').split(',')]
+                problematic_spans = ast.literal_eval(spans_text)
             except Exception as e:
                 logger.error(f"Error parsing problematic spans: {e}")
 
