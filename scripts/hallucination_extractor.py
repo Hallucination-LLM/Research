@@ -1,5 +1,6 @@
 from typing import List, Tuple
 from golemai.nlp.llm_resp_gen import LLMRespGen
+from .extractor_enums import DfColumnsEnum, EvalDfColumnsEnum
 import pandas as pd
 
 
@@ -12,24 +13,49 @@ class HallucinationExtractor:
         self._llm_rg = llm_rg
 
     def process_data(self):
-        self.df = self.df.loc[self.df.index.isin(self.eval_df.index)]
-        self.df['problematic_spans'] = self.eval_df['problematic_spans'].values
-        self.df['problematic_spans'] = self.df['problematic_spans'].apply(lambda x: [span.removeprefix('\"').removesuffix('\"') for span in x] if x is not None else None)
-        self.df['model_response'] = self.eval_df['response'].values
-        self.df = self.df.loc[self.df['model_response'] != '<CUDA_ERROR>']
+        self._keep_valid_indices()
+        self._set_from_eval()
+        self._remove_from_spans()
+        self._remove_errors()
 
-        self.df['gpt_index'] = self.df.index
-        self.df['indices'] = self.df.apply(lambda row: self._find_indices(row['model_response'], row['problematic_spans']), axis=1)
-        self.df = self.df.loc[~self.df['index'].isin([row['index'] for i, row in self.df.iterrows() if any(index == (None, None) for index in row['indices'])])]
+        self._handle_indices()
+        self._rename_columns()
+        self._calculate_hallu_features()
+
+    def _keep_valid_indices(self):
+        self.df = self.df.loc[self.df.index.isin(self.eval_df.index)]
+
+    def _set_from_eval(self):
+        self.df[DfColumnsEnum.PROBLEMATIC] = self.eval_df[EvalDfColumnsEnum.PROBLEMATIC].values
+        self.df[DfColumnsEnum.RESPONSE] = self.eval_df[EvalDfColumnsEnum.RESPONSE].values
+
+    def _remove_from_spans(self):
+        self.df[DfColumnsEnum.PROBLEMATIC] = self.df[DfColumnsEnum.PROBLEMATIC].apply(lambda x: [span.removeprefix('\"').removesuffix('\"') for span in x] if x is not None else None)
+
+    def _remove_errors(self):
+        self.df = self.df.loc[self.df[DfColumnsEnum.RESPONSE] != '<CUDA_ERROR>']
+
+    def _handle_indices(self):
+        self.df[DfColumnsEnum.GPT_INDEX] = self.df.index
+        self.df['indices'] = self.df.apply(
+            lambda row: self._find_indices(row[DfColumnsEnum.RESPONSE], row[DfColumnsEnum.PROBLEMATIC]), axis=1)
+        self.df = self.df.loc[~self.df[DfColumnsEnum.IDX].isin(
+            [row[DfColumnsEnum.IDX] for i, row in self.df.iterrows() if
+             any(index == (None, None) for index in row['indices'])])]
         self.df = self.df.drop(columns=['indices'])
+
+    def _rename_columns(self):
         self.df = self.df.rename(columns={'question': 'query'})
 
-        self.df[['prompt_length', 'formatted_context']] = self.df.apply(self._format_context, axis=1)
-        self.df['hallu_indices'] = self.df.apply(lambda row: self._find_indices(row['formatted_context'],
-                                                                                row['problematic_spans']), axis=1)
-        self.df['hallu_tokens'] = self.df.apply(lambda row: self._find_hallu_tokens(row['formatted_context'],
-                                                                                    row['hallu_indices']), axis=1)
-        self.df['contain_hallu'] = self.df['problematic_spans'].apply(lambda x: True if x else False)
+    def _calculate_hallu_features(self):
+        self.df[[DfColumnsEnum.PROMPT_LEN, DfColumnsEnum.CONTEXT]] = self.df.apply(self._format_context, axis=1)
+        self.df[DfColumnsEnum.HALLU_IDX] = self.df.apply(lambda row: self._find_indices(row[DfColumnsEnum.CONTEXT],
+                                                                                        row[DfColumnsEnum.PROBLEMATIC]),
+                                                         axis=1)
+        self.df[DfColumnsEnum.HALLU_TOKENS] = self.df.apply(
+            lambda row: self._find_hallu_tokens(row[DfColumnsEnum.CONTEXT],
+                                                row[DfColumnsEnum.HALLU_IDX]), axis=1)
+        self.df[DfColumnsEnum.CONTAIN_HALLU] = self.df[DfColumnsEnum.PROBLEMATIC].apply(lambda x: True if x else False)
 
     @staticmethod
     def _find_indices(response: str, spans: List[str] | str) -> List[Tuple[int, int]]:
@@ -57,7 +83,7 @@ class HallucinationExtractor:
         prompt_length = self._llm_rg.tokenizer(formatted_prompt,
                                                return_tensors="pt",
                                                padding=True)['inputs_ids'].shape[1]
-        formatted_context = f"{formatted_prompt}{row['model_response']}"
+        formatted_context = f"{formatted_prompt}{row[DfColumnsEnum.RESPONSE]}"
         return prompt_length, formatted_context
 
     def _find_hallu_tokens(self, formatted_context: str, hallu_indices: List[Tuple[int, int]]) -> List[bool]:
