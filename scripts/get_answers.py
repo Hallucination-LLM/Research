@@ -43,7 +43,7 @@ if __name__ == '__main__':
     load_dotenv()
 
     DATA_DIR = 'data'
-    DS_NAME = 'data_filtered_sample_1500.parquet'
+    DS_NAME = 'new_version_sample_1500_filtered.parquet'
 
     df = pd.read_parquet(os.path.join("..", DATA_DIR, DS_NAME)).reset_index(drop=True)
 
@@ -76,6 +76,8 @@ if __name__ == '__main__':
             "return_dict_in_generate": RETURN_DICT_IN_GEN,
             "output_attentions": True,
             "output_hidden_states": False,
+            "skip_prompt_tokens": True,
+            "skip_special_tokens": True,
         },
         dola_layers="high" if DOLA else None,
         repetition_penalty=1.2 if DOLA else 1.0
@@ -98,6 +100,7 @@ if __name__ == '__main__':
     )
 
     resps = resps['model_responses']
+    print(resps)
 
     api_key = os.getenv("OPENAI_API_KEY")
 

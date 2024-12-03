@@ -20,3 +20,7 @@ checkpoints/
 /.idea
 .env
 secrets/storage-gcp-key.json
+scripts/get_answers.py
+scripts/t.ipynb
+*.json
+*.parquet
