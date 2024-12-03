@@ -133,6 +133,8 @@ class LLMRespGen:
         self.system_msg = system_msg
         self.batch_size = batch_size
         self.has_system_role = has_system_role
+        self.skip_prompt_tokens = True
+        self.skip_special_tokens = True
 
         self.checkpoint_path = None
         self.configure_checkpoint(checkpoint_path=checkpoint_path)
@@ -284,7 +286,7 @@ class LLMRespGen:
 
         DEFAULT_LOCAL_GENERATION_CONFIG = {
             "max_new_tokens": 1024,
-            "temperature": 0.0,
+            # "temperature": 0.0,
             "repetition_penalty": 1.0,
             "do_sample": False,
             "use_cache": True,
@@ -296,6 +298,12 @@ class LLMRespGen:
             "temperature": 0.0,
             "timeout": 20,
         }
+
+        if "skip_prompt_tokens" in kwargs:
+            self.skip_prompt_tokens = kwargs.pop("skip_prompt_tokens")
+
+        if "skip_special_tokens" in kwargs:
+            self.skip_special_tokens = kwargs.pop("skip_special_tokens")
 
         if self.model_type in ["api", "openai"]:
 
@@ -633,6 +641,7 @@ class LLMRespGen:
                 model=self.llm,
                 tokenizer=self.tokenizer,
                 generation_config=self.generation_config,
+                skip_prompt_tokens=self.skip_prompt_tokens,
                 device=self.device,
             )
 
@@ -944,7 +953,7 @@ class LLMRespGen:
                     if isinstance(llm_responses, torch.Tensor):
 
                         llm_responses = self.tokenizer.batch_decode(
-                            llm_responses, skip_special_tokens=True
+                            llm_responses, skip_special_tokens=self.skip_special_tokens
                         )
 
                     if hasattr(output, "attentions"):
@@ -1020,10 +1029,7 @@ class LLMRespGen:
                                 logger.error(f"Error saving hidden states: {e}")
 
                 for idx, response in zip(batch_ids, llm_responses):
-                    # index = i - len(batch_input) + j + 1
-                    self.model_responses["model_responses"][
-                        idx
-                    ] = response.split("\nmodel\n")[-1].strip()
+                    self.model_responses["model_responses"][idx] = response
 
                 del batch_input
                 torch.cuda.empty_cache()

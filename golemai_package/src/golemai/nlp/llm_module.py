@@ -72,17 +72,11 @@ def load_model(
             device_map=device_map,
             torch_dtype=dtype,
             load_in_4bit=load_in_4bit,
-            # quantization_config=(
-            #     BitsAndBytesConfig(
-            #         load_in_4bit=load_in_4bit, bnb_4bit_compute_dtype=dtype
-            #     )
-            #     if load_in_4bit
-            #     else None
-            # ),
             **kwargs,
         )
 
         model.eval()
+        model.config.eos_token_id = tokenizer.eos_token_id
 
     return model, tokenizer
 
@@ -132,7 +126,7 @@ def prepare_prompt(
     if has_system_role:
         messages.append({"role": "system", "content": system_input})
 
-    messages = [
+    messages.append(
         {
             "role": "user",
             "content": (
@@ -141,7 +135,7 @@ def prepare_prompt(
                 else user_input
             ),
         },
-    ]
+    )
 
     prompt = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
@@ -327,6 +321,7 @@ def generate_response_local(
     tokenizer: transformers.AutoTokenizer,
     inputs: str | list[str],
     generation_config: transformers.GenerationConfig = None,
+    skip_prompt_tokens: bool = True,
     device: str = "cuda",
 ) -> str:
     """Generates a response using a local language model.
@@ -346,13 +341,24 @@ def generate_response_local(
 
     try:
 
-        inputs = tokenizer(inputs, return_tensors="pt", padding=True).to(device)
+        inputs = tokenizer(inputs, return_tensors="pt", padding=True, add_special_tokens=False).to(device)
 
         outputs = model.generate(
             **inputs, 
             generation_config=generation_config
         )
 
+        inputs = inputs.to('cpu')
+
+        if skip_prompt_tokens:
+
+            prompt_length = inputs['input_ids'].shape[-1]
+
+            if hasattr(outputs, "sequences"):
+                outputs.sequences = outputs.sequences.detach().cpu()[:, prompt_length:]
+            else:
+                outputs = outputs.detach().cpu()[:, prompt_length:]
+            
         # outputs = tokenizer.batch_decode(outputs.sequences if hasattr(outputs, "sequences") else outputs, skip_special_tokens=True)
 
     except Exception as e:
