@@ -79,8 +79,16 @@ class LLMEvaluator(LLMRespGen):
         result_df = pd.DataFrame(results)
         result_df = result_df[[self.id_col, 'decision', 'problematic_spans', 'gpt4_explanation']]
 
-        df = df.merge(result_df, on=self.id_col, how='left')
-        df.to_parquet(f'{exp_name}.parquet')
+
+        filename = f'{exp_name}.parquet'
+        df = df.merge(result_df, on=self.id_col, how='right')
+
+        if os.path.exists(filename):
+            df_exist = pd.read_parquet(filename)
+            df = pd.concat([df_exist, df])
+            df = df.drop_duplicates(subset=self.id_col)
+
+        df.to_parquet(filename)
         
         print(f"Total Cost: {total_cost}")
         print(f"Accuracy: {accuracy}")
