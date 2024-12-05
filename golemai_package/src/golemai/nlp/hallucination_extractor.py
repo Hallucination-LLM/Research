@@ -9,6 +9,7 @@ class HallucinationDatasetExtractor:
     def __init__(self, df: pd.DataFrame, llm_rg: LLMRespGen, att_dir_path: str = 'attensions'):
         self.df = df
         self._llm_rg = llm_rg
+        self._setup()
 
         self.att_dir_path = att_dir_path
         self.context_span = '`CONTEXT`'
@@ -89,12 +90,20 @@ class HallucinationDatasetExtractor:
 
         self.df.to_parquet(os.path.join(exp_name, 'hallu_df_info.parquet'))
         return self.df
+    
+    def _setup(self):
+
+        if self._llm_rg.tokenizer is None:
+
+            import transformers
+            self._llm_rg.tokenizer = transformers.AutoTokenizer.from_pretrained(self._llm_rg.model_id)
 
     def _prestage(self):
 
         self.df.index = self.df[self._llm_rg.id_col]
         self.df.drop(columns=[self._llm_rg.id_col], inplace=True)
         self.df.index.name = None
+        self.df = self.df.dropna()
 
         if 'question' in self.df.columns:
             self.df = self.df.rename(columns={'question': 'query'})
@@ -341,7 +350,7 @@ class HallucinationDatasetExtractor:
             self,
             X: dict,
             n_first_tokens: int = 8,
-            att_file_type: str = 'npy'
+            att_file_type: str = 'npy',
     ):
 
         Y = {}
@@ -364,7 +373,12 @@ class HallucinationDatasetExtractor:
                 }
 
             else:
-                y = hallu_tokens[n_prompt_tokens: n_prompt_tokens + n_first_tokens].any().astype(int)
+
+                idx = slice(n_prompt_tokens, n_first_tokens) \
+                    if n_first_tokens is None \
+                    else slice(n_prompt_tokens, n_prompt_tokens + n_first_tokens)
+                
+                y = hallu_tokens[idx].any().astype(int)
 
             Y[att_file] = y
 
@@ -428,7 +442,9 @@ class HallucinationDatasetExtractor:
             skip_first_n_tokens: int = 8,
             att_file_type: str = 'npy',
             save_to_disk: bool = True,
+            save_name: str = 'attension_df',
             window_size: int = 0):
+        
 
         X, _ = self.prepare_and_load_att_tensors(
             examined_span_type=examined_span_type,
@@ -445,7 +461,7 @@ class HallucinationDatasetExtractor:
         df = self._prep_att_dataset(X, Y, att_file_type=att_file_type)
 
         if save_to_disk:
-            df.to_parquet(os.path.join(exp_name, 'attension_df.parquet'))
+            df.to_parquet(os.path.join(exp_name, f'{save_name}.parquet'))
             
         return df
 

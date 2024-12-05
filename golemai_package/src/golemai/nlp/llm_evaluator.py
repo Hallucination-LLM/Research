@@ -61,7 +61,7 @@ class LLMEvaluator(LLMRespGen):
 
         return result, cost, prompt
     
-    def evaluate(self, df, exp_name, responses, limit=None):
+    def evaluate(self, df, exp_name, responses, limit=None, checkpoint_file: str = 'evaluated.json'):
         df_eval = df.copy()
         df_eval = df_eval.loc[df_eval[self.id_col].isin(list(responses.keys()))]
         df_eval[exp_name] = df_eval[self.id_col].map(responses)
@@ -72,7 +72,7 @@ class LLMEvaluator(LLMRespGen):
         responses = df_eval[[self.id_col, exp_name]]
         responses.columns = [self.id_col, 'answer']
 
-        self.result_path = os.path.join(exp_name, f'evaluated.json')
+        self.result_path = os.path.join(exp_name, checkpoint_file)
         results, total_cost, accuracy = self.evaluate_from_dfs(
             df_eval, responses
         )

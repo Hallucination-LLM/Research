@@ -28,6 +28,7 @@ src/golemai/nlp/embeddings.py
 src/golemai/nlp/evaluation_schema.py
 src/golemai/nlp/generate_embeddings.py
 src/golemai/nlp/gpu_ops.py
+src/golemai/nlp/hallucination_extractor.py
 src/golemai/nlp/llm_evaluator.py
 src/golemai/nlp/llm_module.py
 src/golemai/nlp/llm_resp_gen.py

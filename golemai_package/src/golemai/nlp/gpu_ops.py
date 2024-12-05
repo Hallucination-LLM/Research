@@ -22,7 +22,7 @@ def setup_environment(
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if device == "cpu":
-        raise RuntimeError("No GPU available. Exiting...")
+        return device
     
     
     device = device if device_num == "auto" else f"cuda"

@@ -564,6 +564,8 @@ class LLMRespGen:
             )
         )
 
+        print(checkpoint_path)
+
         if not os.path.exists(os.path.dirname(checkpoint_path)):
             os.makedirs(os.path.dirname(checkpoint_path))
 
@@ -789,7 +791,7 @@ class LLMRespGen:
 
     def _process_hidden_or_att(
         self,
-        x,
+        x
     ) -> np.ndarray:
         """
         Processes hidden states or attention weights from a tuple of tensors.
@@ -1038,7 +1040,7 @@ class LLMRespGen:
                                 logger.error(f"Error saving hidden states: {e}")
 
                 for idx, response in zip(batch_ids, llm_responses):
-                    self.model_responses["model_responses"][idx] = response
+                    self.model_responses["model_responses"][idx] = response.strip()
 
                 del batch_input
                 torch.cuda.empty_cache()
