@@ -52,7 +52,9 @@ if __name__ == '__main__':
     llm_rg = LLMRespGen(
         df=df,
         id_col='id',
-        model_type='local',
+        model_type='api',
+        api_url='<>',
+        api_key='<>',
         system_msg=SYSTEM_MSG_RAG_SHORT,
         prompt_template=QUERY_INTRO_NO_ANS if not FEWSHOT else QUERY_INTRO_FEWSHOT,
         batch_size=1,
@@ -66,30 +68,30 @@ if __name__ == '__main__':
             checkpoint_freq=2
         )
 
-    llm_rg.load_llm(use_unsloth=False, dtype=torch.bfloat16)
+    # llm_rg.load_llm(use_unsloth=False, dtype=torch.bfloat16)
 
-    llm_rg.set_generation_config(
-        model_id=llm_rg.model_id,
-        **{
-            "max_new_tokens": 200,
-            # "temperature": 0.0,
-            "do_sample": False,
-            "use_cache": True,
-            # "cache_implementation": None,
-            "return_dict_in_generate": RETURN_DICT_IN_GEN,
-            "output_attentions": True,
-            "output_hidden_states": False,
-            "skip_prompt_tokens": True,
-            "skip_special_tokens": True,
-        },
-        dola_layers="high" if DOLA else None,
-        repetition_penalty=1.2 if DOLA else 1.0
-    )
+    # llm_rg.set_generation_config(
+    #     model_id=llm_rg.model_id,
+    #     **{
+    #         "max_new_tokens": 200,
+    #         # "temperature": 0.0,
+    #         "do_sample": False,
+    #         "use_cache": True,
+    #         # "cache_implementation": None,
+    #         "return_dict_in_generate": RETURN_DICT_IN_GEN,
+    #         "output_attentions": True,
+    #         "output_hidden_states": False,
+    #         "skip_prompt_tokens": True,
+    #         "skip_special_tokens": True,
+    #     },
+    #     dola_layers="high" if DOLA else None,
+    #     repetition_penalty=1.2 if DOLA else 1.0
+    # )
 
-    llm_rg.configure_att_hidden_config(
-        prompt_offset=8,
-        take_only_generated=True
-    )
+    # llm_rg.configure_att_hidden_config(
+    #     prompt_offset=8,
+    #     take_only_generated=True
+    # )
 
     llm_rg.df = llm_rg.df.rename(columns={'question': 'query'})
 
