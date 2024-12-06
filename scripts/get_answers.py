@@ -13,6 +13,7 @@ if __name__ == '__main__':
     parser.add_argument("--checkpoint_file", type=str, default=None)
     parser.add_argument("--exp_name", type=str, default=None)
     parser.add_argument("--return_dict_in_gen", action='store_true', default=False)
+    parser.add_argument("--task_type", type=str, default='qa')
 
     args = parser.parse_args()
 
@@ -24,6 +25,7 @@ if __name__ == '__main__':
     CHECKPOINT_FILE = args.checkpoint_file
     EXP_NAME = args.exp_name
     RETURN_DICT_IN_GEN = args.return_dict_in_gen
+    TASK_TYPE = args.task_type
 
     MODEL_ID = 'gemma-2-9b-it-bnb-4bit'
 
@@ -36,7 +38,7 @@ if __name__ == '__main__':
     from dotenv import load_dotenv
     from golemai.nlp.llm_resp_gen import LLMRespGen
     from golemai.nlp.hallucination_extractor import HallucinationDatasetExtractor
-    from golemai.nlp.prompts import SYSTEM_MSG_RAG_SHORT, QUERY_INTRO_NO_ANS, QUERY_INTRO_FEWSHOT, PROMPT_QA
+    from golemai.nlp.prompts import SYSTEM_MSG_RAG_SHORT, QUERY_INTRO_NO_ANS, QUERY_INTRO_FEWSHOT, PROMPT_QA, PROMPT_SUMMARIZATION
     from golemai.nlp.llm_evaluator import LLMEvaluator
     from datetime import datetime
     import torch
@@ -45,7 +47,12 @@ if __name__ == '__main__':
 
     REPO_DIR = 'Research'
     DATA_DIR = 'data'
-    DS_NAME = 'new_version_merged_df.parquet'
+    DS_NAME = 'cnndm.parquet'
+
+    TASKS = {
+        'qa': PROMPT_QA,
+        'summ': PROMPT_SUMMARIZATION
+    }
 
     df = pd.read_parquet(os.path.join(REPO_DIR, DATA_DIR, DS_NAME)).reset_index(drop=True)
 
@@ -99,7 +106,7 @@ if __name__ == '__main__':
         row_start=START,
         row_end=END,
         max_prompt_length_col='context_length',
-        max_prompt_length=3996
+        max_prompt_length=3896
     )
 
     resps = resps['model_responses']
@@ -113,7 +120,7 @@ if __name__ == '__main__':
         api_url="https://api.openai.com/v1/",
         api_key=api_key,
         system_msg="You are a helpful assistant.",
-        prompt_template=PROMPT_QA,
+        prompt_template=TASKS.get(TASK_TYPE, 'qa') ,
         has_system_role=True,
         use_pydantic=False,
     ).set_generation_config(
@@ -125,23 +132,27 @@ if __name__ == '__main__':
         df=df,
         exp_name=EXP_NAME if EXP_NAME is not None else f'{MODEL_ID}_eval_{datetime.now().strftime("%Y-%m-%d_%H-%M")}',
         responses=resps,
+        checkpoint_file=f'evaluated_{START}_{END}.json'
     )
 
     print(df.head())
 
-    # hallu_ext = HallucinationDatasetExtractor(
-    #     df=df,
-    #     llm_rg=llm_rg,
-    #     att_dir_path=os.path.join(EXP_NAME, 'attentions'),
-    # )
+    hallu_ext = HallucinationDatasetExtractor(
+        df=df,
+        llm_rg=llm_rg,
+        att_dir_path=os.path.join(EXP_NAME, 'attentions'),
+    )
 
-    # df = hallu_ext.prepare_hallucinated_df_info(exp_name=EXP_NAME)
-    # print(df.head())
+    df = hallu_ext.prepare_hallucinated_df_info(exp_name=EXP_NAME)
+    print(df.head())
 
-    # hallu_df = hallu_ext.create_attension_dataset(
-    #     examined_span_type='context',
-    #     skip_first_n_tokens=8,
-    #     n_first_tokens=8,
-    #     window_size=0,
-    #     exp_name=EXP_NAME
-    # )
+    hallu_df = hallu_ext.create_attension_dataset(
+        examined_span_type='context',
+        skip_first_n_tokens=8,
+        n_first_tokens=None,
+        window_size=8,
+        exp_name=EXP_NAME,
+        save_name=f'attension_{START}_{END}_df'
+    )
+
+    print(f'Prepared attention dataset')
