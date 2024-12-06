@@ -131,6 +131,8 @@ if __name__ == '__main__':
     df = evaluator.evaluate(
         df=df,
         exp_name=EXP_NAME if EXP_NAME is not None else f'{MODEL_ID}_eval_{datetime.now().strftime("%Y-%m-%d_%H-%M")}',
+        row_start=START,
+        row_end=END,
         responses=resps,
         checkpoint_file=f'evaluated_{START}_{END}.json'
     )

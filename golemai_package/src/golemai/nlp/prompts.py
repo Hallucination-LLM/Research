@@ -91,6 +91,10 @@ SYSTEM_MSG_RAG_SHORT = """
     If you can not answer the question only based on the provided context, return the answer: `Nie mogę udzielić odpowiedzi na to pytanie na podstawie podanego kontekstu`.
 """
 
+SYSTEM_MSG_SUM_SHORT = """
+    You are a helpful assistant. Your job will be to answer questions accurately based on the given context and not your internal knowledge.
+"""
+
 SYSTEM_MSG_RAG = """
     You are a helpful assistant. Your job will be to answer questions accurately based on the given context and not your internal knowledge.
     If you can not answer the question only based on the provided context, return the answer: `Nie mogę udzielić odpowiedzi na to pytanie na podstawie podanego kontekstu`.
