@@ -24,3 +24,6 @@ scripts/get_answers.py
 scripts/t.ipynb
 *.json
 *.parquet
+
+
+temp/
