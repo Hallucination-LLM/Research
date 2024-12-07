@@ -88,6 +88,7 @@ class HallucinationDatasetExtractor:
 
             self.df[col_name] = col_values
 
+        # if problem comment out the following line
         self.df.to_parquet(os.path.join(exp_name, 'hallu_df_info.parquet'))
         return self.df
     
@@ -313,7 +314,9 @@ class HallucinationDatasetExtractor:
             examined_span_type: str = 'context',
             n_first_tokens: int = 8,
             skip_first_n_tokens: int = 8,
-            window_size: int = 0):
+            window_size: int = 0,
+            agg_func: callable = None
+            ):
         
         X, errors = {}, []
 
@@ -326,7 +329,7 @@ class HallucinationDatasetExtractor:
                     att_path=self.att_dir_path,
                     idx=idx,
                     skip_first_n_tokens=skip_first_n_tokens,
-                    postprocess_fn=self.agg_att,
+                    postprocess_fn=agg_func,
                     window_size=window_size,
                     examined_span_type=examined_span_type,
                     n_first_tokens=n_first_tokens
@@ -424,11 +427,7 @@ class HallucinationDatasetExtractor:
         X = np.array([X[k] for k in sorted_x_keys])
         Y = np.array([Y[k] for k in sorted_x_keys])
 
-        FEATURE_NAMES = [
-            f"layer_{i}_head_{j}" for i in range(X.shape[1]) for j in range(X.shape[2])
-        ]
-
-        df = pd.DataFrame(X.reshape(X.shape[0], -1), columns=FEATURE_NAMES)
+        df = pd.DataFrame(X.reshape(X.shape[0], -1))
         df[label_column] = Y.tolist()
         df['dataset'] = dataset_names
 
@@ -443,14 +442,20 @@ class HallucinationDatasetExtractor:
             att_file_type: str = 'npy',
             save_to_disk: bool = True,
             save_name: str = 'attension_df',
-            window_size: int = 0):
+            window_size: int = 0,
+            agg_func: callable = None
+            ):
+        
+        if agg_func is None:
+            agg_func = self.agg_att
         
 
         X, _ = self.prepare_and_load_att_tensors(
             examined_span_type=examined_span_type,
             n_first_tokens=n_first_tokens,
             skip_first_n_tokens=skip_first_n_tokens,
-            window_size=window_size
+            window_size=window_size,
+            agg_func=agg_func
         )
 
         Y = self.prepare_hallu_labels(X, n_first_tokens=n_first_tokens, att_file_type=att_file_type)
@@ -461,7 +466,7 @@ class HallucinationDatasetExtractor:
         df = self._prep_att_dataset(X, Y, att_file_type=att_file_type)
 
         if save_to_disk:
-            df.to_parquet(os.path.join(exp_name, f'{save_name}.parquet'))
+            df.to_parquet(f'{save_name}.parquet')
             
         return df
 
