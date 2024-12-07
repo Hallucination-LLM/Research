@@ -123,7 +123,7 @@ class HallucinationDatasetExtractor:
             None
         """
 
-        self.df = self.df.loc[self.df['model_response'] != '<CUDA_ERROR>']
+        self.df = self.df.dropna(how='all')
         self.df['indices'] = self.df.apply(lambda row: self._find_indices(row['model_response'], row['problematic_spans']), axis=1)
         self.df = self.df.loc[~self.df.index.isin([i for i, row in self.df.iterrows() if any(index == (None, None) for index in row['indices'])])]
         self.df = self.df.drop(columns=['indices'])

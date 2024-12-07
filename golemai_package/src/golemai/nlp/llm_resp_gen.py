@@ -811,7 +811,8 @@ class LLMRespGen:
 
         n_prompt_tokens = x[0][0].shape[-2]
 
-        print(f"n_prompt_tokens: {n_prompt_tokens}, n_generated_tokens: {n_generated_tokens}")
+        print(f"n_prompt_tokens: {n_prompt_tokens}, n_generated_tokens: {n_generated_tokens}", flush=True)
+
 
         num_all_tokens = n_prompt_tokens + n_generated_tokens
 
@@ -826,11 +827,11 @@ class LLMRespGen:
         dtype=np.float16)
 
         for i, t in enumerate(x[0]):
-            init_matrix[i, :, :n_prompt_tokens, :] = t.detach().cpu().to(torch.float16).numpy().squeeze()[..., :num_all_tokens]
+            init_matrix[i, :, :n_prompt_tokens, :n_prompt_tokens] = t.detach().cpu().to(torch.float16).numpy().squeeze()[..., :n_prompt_tokens]
 
-        for i, token_att in enumerate(x[1:], start=0):
+        for i, token_att in enumerate(x[1:]):
             for j, t in enumerate(token_att):
-                init_matrix[j, :, n_prompt_tokens + i, :] = t.detach().cpu().to(torch.float16).numpy().squeeze()[..., :num_all_tokens]
+                init_matrix[j, :, n_prompt_tokens + i, :n_prompt_tokens + i + 1] = t.detach().cpu().to(torch.float16).numpy().squeeze()[..., :n_prompt_tokens + i + 1]
 
         return init_matrix[:, :, (max(n_prompt_tokens - prompt_offset, 0)) if take_only_generated else 0:, :]
 
