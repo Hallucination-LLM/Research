@@ -2,6 +2,7 @@ from typing import List, Tuple
 import os
 import numpy as np
 import pandas as pd
+import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from golemai.nlp.llm_resp_gen import LLMRespGen
 
@@ -241,11 +242,13 @@ class HallucinationDatasetExtractor:
         att_path: str,
         n_first_tokens: int = None,
         skip_first_n_tokens: int = None,
+        skip_last_n_tokens: int = None,
         n_context_tokens_start_idx: int = None,
         n_context_tokens_end_idx: int = None,
         window_size: int = 0,
         window_step: int = 4,
         postprocess_fn: callable = None,
+        valid_example_th: int = 4,
         **kwargs: dict,
     ) -> np.ndarray:
         """
@@ -256,9 +259,13 @@ class HallucinationDatasetExtractor:
         att_tensor = np.load(att_path)
 
         skip_first_n_tokens = skip_first_n_tokens if skip_first_n_tokens is not None else 0
+        skip_last_n_tokens = skip_last_n_tokens if skip_last_n_tokens is not None else 0
         n_first_tokens = n_first_tokens if n_first_tokens is not None else att_tensor.shape[-2]
 
-        att_tensor = att_tensor[..., slice(skip_first_n_tokens, n_first_tokens + skip_first_n_tokens), slice(n_context_tokens_start_idx, n_context_tokens_end_idx)]
+        att_tensor = att_tensor[..., slice(skip_first_n_tokens, n_first_tokens + skip_first_n_tokens - skip_last_n_tokens), slice(n_context_tokens_start_idx, n_context_tokens_end_idx)]
+        
+        if att_tensor.shape[-2] < valid_example_th:
+            return None
 
         if (window_size) and (att_tensor.shape[-2] > window_size):
 
@@ -280,8 +287,12 @@ class HallucinationDatasetExtractor:
         examined_span_type: str = 'context',
         n_first_tokens: int = None,
         skip_first_n_tokens: int = None,
+        skip_last_n_tokens: int = None,
         postprocess_fn: callable = None,
-        window_size: int = 0):
+        window_size: int = 0,
+        window_step: int = 4,
+        valid_example_th: int = 4,
+        ) -> Tuple[np.ndarray, str, str]:
 
         att_file = f"{idx}.npy"
         print(f"att_file: {att_file}")
@@ -297,10 +308,13 @@ class HallucinationDatasetExtractor:
                 att_path=att_file_path,
                 n_first_tokens=n_first_tokens,
                 skip_first_n_tokens=skip_first_n_tokens,
+                skip_last_n_tokens=skip_last_n_tokens,
                 n_context_tokens_start_idx=n_context_tokens_start_idx,
                 n_context_tokens_end_idx=n_context_tokens_end_idx,
                 postprocess_fn=postprocess_fn,
-                window_size=window_size
+                window_size=window_size,
+                window_step=window_step,
+                valid_example_th=valid_example_th
             )
             
             return att_tensor, None, att_file
@@ -314,11 +328,14 @@ class HallucinationDatasetExtractor:
             examined_span_type: str = 'context',
             n_first_tokens: int = 8,
             skip_first_n_tokens: int = 8,
+            skip_last_n_tokens: int = 0,
             window_size: int = 0,
-            agg_func: callable = None
-            ):
+            agg_func: callable = None,
+            window_step: int = 4,
+            valid_example_th: int = 4
+        ):
         
-        X, errors = {}, []
+        X, errors, not_valid = {}, [], []
 
         with ProcessPoolExecutor() as executor:
 
@@ -329,10 +346,13 @@ class HallucinationDatasetExtractor:
                     att_path=self.att_dir_path,
                     idx=idx,
                     skip_first_n_tokens=skip_first_n_tokens,
+                    skip_last_n_tokens=skip_last_n_tokens,
                     postprocess_fn=agg_func,
                     window_size=window_size,
                     examined_span_type=examined_span_type,
-                    n_first_tokens=n_first_tokens
+                    n_first_tokens=n_first_tokens,
+                    window_step=window_step,
+                    valid_example_th=valid_example_th
                 )
                 for idx, row in self.df.iterrows()
             ]
@@ -344,9 +364,13 @@ class HallucinationDatasetExtractor:
                 if error:
                     errors.append(error)
                 else:
-                    X[att_file] = result
 
-        print(f"Completed with {len(errors)} errors.")
+                    if result is not None:
+                        X[att_file] = result
+                    else:
+                        not_valid.append(att_file)
+
+        print(f"Completed with {len(errors)} errors and {len(not_valid)} invalid examples.")
         return X, errors
 
     def prepare_hallu_labels(
@@ -439,10 +463,17 @@ class HallucinationDatasetExtractor:
             examined_span_type: str = 'context',
             n_first_tokens: int = 8,
             skip_first_n_tokens: int = 8,
+            skip_last_n_tokens: int = 0,
             att_file_type: str = 'npy',
             save_to_disk: bool = True,
-            save_name: str = 'attension_df',
+            saving_name_params: dict = {
+                'att_ds_name': 'att_ds',
+                'start': 0,
+                'end': None
+            },
             window_size: int = 0,
+            window_step: int = 4,
+            valid_example_th: int = 4,
             agg_func: callable = None
             ):
         
@@ -454,8 +485,11 @@ class HallucinationDatasetExtractor:
             examined_span_type=examined_span_type,
             n_first_tokens=n_first_tokens,
             skip_first_n_tokens=skip_first_n_tokens,
+            skip_last_n_tokens=skip_last_n_tokens,
             window_size=window_size,
-            agg_func=agg_func
+            agg_func=agg_func,
+            window_step=window_step,
+            valid_example_th=valid_example_th
         )
 
         Y = self.prepare_hallu_labels(X, n_first_tokens=n_first_tokens, att_file_type=att_file_type)
@@ -466,7 +500,29 @@ class HallucinationDatasetExtractor:
         df = self._prep_att_dataset(X, Y, att_file_type=att_file_type)
 
         if save_to_disk:
-            df.to_parquet(f'{save_name}.parquet')
+
+            dest_path = os.path.join(exp_name, saving_name_params.get('att_ds_name', 'att_ds'))
+
+            if not os.path.exists(dest_path):
+                os.makedirs(dest_path)
+
+            metadata = {
+                'examined_span_type': examined_span_type,
+                'n_first_tokens': n_first_tokens,
+                'skip_first_n_tokens': skip_first_n_tokens,
+                'skip_last_n_tokens': skip_last_n_tokens,
+                'window_size': window_size,
+                'window_step': window_step,
+                'valid_example_th': valid_example_th,
+                'agg_func': agg_func.__name__,
+                'att_file_type': att_file_type,
+            }
+
+            filename = f'attension_{saving_name_params.get("start", 0)}_{saving_name_params.get("end", len(df))}.parquet'
+            df.to_parquet(os.path.join(dest_path, filename))
+
+            with open(os.path.join(dest_path, 'metadata.json'), 'w') as f:
+                json.dump(metadata, f)
             
         return df
 
