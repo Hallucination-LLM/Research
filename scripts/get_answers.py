@@ -27,7 +27,7 @@ if __name__ == '__main__':
     RETURN_DICT_IN_GEN = args.return_dict_in_gen
     TASK_TYPE = args.task_type
 
-    MODEL_ID = 'gemma-2-9b-it-bnb-4bit'
+    MODEL_ID = 'meta-llama/Llama-2-7b-chat-hf'
 
     if DEVICE_NUM != 'auto':
         os.environ["CUDA_VISIBLE_DEVICES"] = f"{DEVICE_NUM}"
@@ -45,9 +45,9 @@ if __name__ == '__main__':
 
     load_dotenv()
 
-    REPO_DIR = 'Research'
+    REPO_DIR = '.'
     DATA_DIR = 'data'
-    DS_NAME = 'cnndm.parquet'
+    DS_NAME = 'new_version_merged_df.parquet'
 
     TASKS = {
         'qa': PROMPT_QA,
@@ -63,7 +63,8 @@ if __name__ == '__main__':
         system_msg=SYSTEM_MSG_RAG_SHORT,
         prompt_template=QUERY_INTRO_NO_ANS if not FEWSHOT else QUERY_INTRO_FEWSHOT,
         batch_size=1,
-        device_num=DEVICE_NUM
+        device_num=DEVICE_NUM,
+        has_system_role=True,
     )
 
     if CHECKPOINT_FILE is not None:
@@ -73,7 +74,7 @@ if __name__ == '__main__':
             checkpoint_freq=2
         )
 
-    llm_rg.load_llm(use_unsloth=False, dtype=torch.bfloat16)
+    llm_rg.load_llm(MODEL_ID, use_unsloth=False, dtype=torch.bfloat16)
 
     llm_rg.set_generation_config(
         model_id=llm_rg.model_id,
@@ -110,7 +111,7 @@ if __name__ == '__main__':
     )
 
     resps = resps['model_responses']
-    print(resps)
+    print("GOT RESPONSES")
 
     api_key = os.getenv("OPENAI_API_KEY")
 
@@ -127,17 +128,15 @@ if __name__ == '__main__':
         model_id="gpt-4o",
     )
 
-
+    model_name = MODEL_ID.split('/')[-1]
     df = evaluator.evaluate(
         df=df,
-        exp_name=EXP_NAME if EXP_NAME is not None else f'{MODEL_ID}_eval_{datetime.now().strftime("%Y-%m-%d_%H-%M")}',
+        exp_name=EXP_NAME if EXP_NAME is not None else f'{model_name}_eval_{datetime.now().strftime("%Y-%m-%d_%H-%M")}',
         row_start=START,
         row_end=END,
         responses=resps,
-        checkpoint_file=f'evaluated_{START}_{END}.json'
     )
-
-    print(df.head())
+    print("EVALUATED RESPONSES")
 
     hallu_ext = HallucinationDatasetExtractor(
         df=df,
@@ -146,15 +145,15 @@ if __name__ == '__main__':
     )
 
     df = hallu_ext.prepare_hallucinated_df_info(exp_name=EXP_NAME)
-    print(df.head())
+    print("PREPARED HALLUCINATED DF INFO")
 
-    hallu_df = hallu_ext.create_attension_dataset(
-        examined_span_type='context',
-        skip_first_n_tokens=8,
-        n_first_tokens=None,
-        window_size=8,
-        exp_name=EXP_NAME,
-        save_name=f'attension_{START}_{END}_df'
-    )
+    # hallu_df = hallu_ext.create_attension_dataset(
+    #     examined_span_type='context',
+    #     skip_first_n_tokens=8,
+    #     n_first_tokens=None,
+    #     window_size=8,
+    #     exp_name=EXP_NAME,
+    #     save_name=f'attension_{START}_{END}_df'
+    # )
 
-    print(f'Prepared attention dataset')
+    # print(f'Prepared attention dataset')
