@@ -2,7 +2,7 @@
 #SBATCH --partition plgrid-gpu-a100
 #SBATCH --nodes 1
 #SBATCH --ntasks-per-node 1
-#SBATCH --cpus-per-task=40
+#SBATCH --cpus-per-task=20
 #SBATCH --mem-per-cpu=1G
 #SBATCH --time 2:00:00
 #SBATCH --job-name jupyter-notebook-tunnel
