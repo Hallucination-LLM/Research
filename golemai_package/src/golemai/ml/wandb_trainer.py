@@ -3,9 +3,16 @@ import numpy as np
 import wandb
 from sklearn.metrics import PrecisionRecallDisplay, RocCurveDisplay, average_precision_score, roc_auc_score, roc_curve
 from sklearn.model_selection import StratifiedKFold, train_test_split
+import pandas as pd
+import wandb.sklearn
 
 class WandbTrainer:
     SEED = 42
+    CROSSVALIDATION_DATASETS = {
+        'LOOKBACK_LENS': ['nq', 'cnndm'],
+        'QA': ['nq', 'bioask', 'hotpotqa_en', 'hotpotqa_pl', 'polqa', 'poquad_v2'],
+        'SUM': ['cnndm', 'xsum'],
+    }
 
     def __init__(self, project_name, api_token=None):
         """
@@ -32,27 +39,9 @@ class WandbTrainer:
             dict: Computed metrics.
         """
         return {
-            "auc": roc_auc_score(y_true, y_pred[:, 1]),
-            "auprc": average_precision_score(y_true, y_pred[:, 1]),
+            "auc": roc_auc_score(y_true, y_pred),
+            "auprc": average_precision_score(y_true, y_pred),
         }
-
-    @staticmethod
-    def log_curves(model, X_data, y_data, dataset_type):
-        """
-        Log ROC and Precision-Recall curves to WandB.
-
-        Args:
-            model: Trained model.
-            X_data (array-like): Feature set.
-            y_data (array-like): Labels.
-            dataset_type (str): Dataset type ('train', 'val', 'test').
-        """
-        roc_curve = RocCurveDisplay.from_estimator(model, X_data, y_data)
-        pr_curve = PrecisionRecallDisplay.from_estimator(model, X_data, y_data)
-        wandb.log({
-            f"roc_curve_{dataset_type}": wandb.Image(roc_curve.figure_),
-            f"pr_curve_{dataset_type}": wandb.Image(pr_curve.figure_),
-        })
 
     def _prepare_datasets(self, train_ds, test_ds):
         """
@@ -65,22 +54,14 @@ class WandbTrainer:
         Returns:
             tuple: Prepared training and test datasets with features and labels.
         """
-        # Log dataset information
-        train_datasets = train_ds.groupby(['dataset', 'label']).size()
-        test_datasets = test_ds.groupby(['dataset', 'label']).size()
-        print(f"Train datasets: {train_datasets}")
-        print(f"Test datasets: {test_datasets}")
-
-        train_datasets_dict = {str(key): value for key, value in train_datasets.to_dict().items()}
-        test_datasets_dict = {str(key): value for key, value in test_datasets.to_dict().items()}
 
         # Split data into features and labels
         X_train, y_train = train_ds.drop(columns=['label', 'dataset']), train_ds['label']
         X_test, y_test = test_ds.drop(columns=['label', 'dataset']), test_ds['label']
 
-        return X_train, y_train, X_test, y_test, train_datasets_dict, test_datasets_dict
+        return X_train, y_train, X_test, y_test
 
-    def _initialize_wandb_run(self, model, train_datasets_dict, test_datasets_dict, description, run_name, **kwargs):
+    def _initialize_wandb_run(self, model, dataset_dict, description, group='test', job_type=None, **kwargs):
         """
         Initialize WandB run with model and dataset configurations.
 
@@ -93,83 +74,24 @@ class WandbTrainer:
         """
         wandb.init(
             project=self.project_name,
-            name=run_name,  # Added run name parameter
+            group=group,
+            job_type=job_type,
+            name=f'{group}_{job_type}_{wandb.util.generate_id()}',
             config={
                 **model.get_params(),
-                "dataset_description": {
-                    "train_datasets": train_datasets_dict,
-                    "test_datasets": test_datasets_dict
-                },
+                "dataset_description": dataset_dict,
                 "description": description,
                 **kwargs,
             },
         )
 
-    def train_model_and_evaluate(self, model, train_ds, test_ds,run_name=None, validation_size=0.2, description=""):
-        """
-        Train the specified model and evaluate it.
-
-        Args:
-            model: Machine learning model or pipeline.
-            train_ds (pd.DataFrame): Training dataset.
-            test_ds (pd.DataFrame): Test dataset.
-            validation_size (float): Validation dataset size as a fraction of training data.
-            description (str): Description of the training run.
-            run_name (str, optional): Specific name for the WandB run.
-
-        Returns:
-            dict: Metrics logged to WandB.
-        """
-        X_train, y_train, X_test, y_test, train_datasets_dict, test_datasets_dict = self._prepare_datasets(train_ds, test_ds)
-
-        # Split train data into train and validation sets
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_train, 
-            y_train, 
-            test_size=validation_size, 
-            stratify=y_train, 
-            random_state=self.SEED
-        )
-
-        # Initialize WandB run
-        self._initialize_wandb_run(model, train_datasets_dict, test_datasets_dict, description, run_name, validation_size=validation_size)
-
-        # Train model
-        model.fit(X_train, y_train)
-        y_pred_train = model.predict_proba(X_train)
-        y_pred_val = model.predict_proba(X_val)
-        y_pred_test = model.predict_proba(X_test)
-
-        # Calculate metrics
-        metrics = {
-            "train": self.compute_metrics(y_train, y_pred_train),
-            "validation": self.compute_metrics(y_val, y_pred_val),
-            "test": self.compute_metrics(y_test, y_pred_test),
-        }
-        flat_metrics = {f"{key}_{subkey}": value for key, submetrics in metrics.items() for subkey, value in submetrics.items()}
-
-        # Log metrics
-        wandb.log(flat_metrics)
-
-        # Plot and log curves
-        wandb.sklearn.plot_roc(y_test, y_pred_test)
-        wandb.sklearn.plot_precision_recall(y_test, y_pred_test)
-        self.log_curves(model, X_train, y_train, "train")
-        self.log_curves(model, X_val, y_val, "val")
-        self.log_curves(model, X_test, y_test, "test")
-
-        wandb.finish()
-        return flat_metrics
-
-    def plot_roc_curves(self, y_true_dict, y_proba_dict, k_folds):
+    def plot_roc_curves(self, y_true_dict, y_proba_dict):
         """
         Create ROC curves for K-Fold cross-validation across test, train, and validation sets.
 
         Args:
             y_true_dict (dict): Dictionary of true labels for each dataset type and fold.
             y_proba_dict (dict): Dictionary of predicted probabilities for each dataset type and fold.
-            k_folds (int): Number of folds used in cross-validation.
-
         Returns:
             dict: Dictionary of matplotlib figure objects for each dataset type.
         """
@@ -179,7 +101,9 @@ class WandbTrainer:
         # Store figures
         roc_figures = {}
 
+
         for dataset_type in dataset_types:
+            aucs = []
             plt.figure(figsize=(10, 8))
             plt.axes().set_aspect('equal', 'datalim')
 
@@ -187,7 +111,7 @@ class WandbTrainer:
             base_fpr = np.linspace(0, 1, 101)
 
             # Plot individual fold ROC curves
-            for i in range(k_folds):
+            for i in range(len(y_true_dict[dataset_type])):
                 y_true = y_true_dict[dataset_type][i]
                 y_proba = y_proba_dict[dataset_type][i]
                 
@@ -199,6 +123,8 @@ class WandbTrainer:
                 tpr_interp[0] = 0.0
                 tprs.append(tpr_interp)
 
+                aucs.append(roc_auc_score(y_true, y_proba))
+
             # Calculate mean and standard deviation of ROC curves
             tprs = np.array(tprs)
             mean_tprs = tprs.mean(axis=0)
@@ -206,6 +132,10 @@ class WandbTrainer:
 
             tprs_upper = np.minimum(mean_tprs + std, 1)
             tprs_lower = mean_tprs - std
+
+            # Calculate AUC
+            mean_auc = np.mean(aucs)
+            std_auc = np.std(aucs)
 
             # Plot mean ROC curve with confidence interval
             plt.plot(base_fpr, mean_tprs, 'b', label='Mean ROC')
@@ -219,7 +149,8 @@ class WandbTrainer:
             plt.ylim([-0.01, 1.01])
             plt.ylabel('True Positive Rate')
             plt.xlabel('False Positive Rate')
-            plt.title(f'ROC Curves for {k_folds}-Fold Cross-Validation - {dataset_type.capitalize()} Set')
+            plt.title(f'ROC Curves for - {dataset_type.capitalize()} Set\n'
+                  f'Mean AUC = {mean_auc:.3f} ± {std_auc:.3f}')
             plt.legend(loc='lower right')
 
             # Store the figure
@@ -227,42 +158,28 @@ class WandbTrainer:
 
         return roc_figures
 
-    def train_model_and_evaluate_kfold(self, model, train_ds, test_ds, run_name=None, description="", k_folds=5):
+    def train_model_and_evaluate_kfold(self, model, X_train, y_train, X_test, y_test, k_folds=5):
         """
         Train the specified model and evaluate it using KFold cross-validation.
 
         Args:
             model: Machine learning model or pipeline.
-            train_ds (pd.DataFrame): Training dataset.
-            test_ds (pd.DataFrame): Test dataset.
-            description (str): Description of the training run.
-            run_name (str, optional): Specific name for the WandB run.
-
+            X_train (pd.DataFrame): Training features.
+            y_train (pd.Series): Training labels.
+            X_test (pd.DataFrame): Test features.
+            y_test (pd.Series): Test labels.
+            k_folds (int, optional): Number of folds for cross-validation.
         Returns:
-            dict: Metrics logged to WandB.
+            dict: Aggregated metrics for train, validation, and test sets.
+            dict: True labels for each set.
+            dict: Predicted probabilities for each set.
         """
-        X_train, y_train, X_test, y_test, train_datasets_dict, test_datasets_dict = self._prepare_datasets(train_ds, test_ds)
 
-        # Initialize WandB run
-        self._initialize_wandb_run(model, train_datasets_dict, test_datasets_dict, run_name=run_name, description=description, k_folds=k_folds)
+        sets = ["train", "validation", "test"]
 
-        results = {
-            "train": [],
-            "validation": [],
-            "test": [],
-        }
-
-        # Dictionaries to store fold-wise true labels and probabilities for ROC curves
-        all_y_true = {
-            "train": [],
-            "validation": [],
-            "test": []
-        }
-        all_y_proba = {
-            "train": [],
-            "validation": [],
-            "test": []
-        }
+        results = {set_type: [] for set_type in sets}
+        all_y_true = {set_type: [] for set_type in sets}
+        all_y_proba = {set_type: [] for set_type in sets}
 
         kfold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=self.SEED)
 
@@ -273,49 +190,118 @@ class WandbTrainer:
             # Train model
             model.fit(X_train_fold, y_train_fold)
             
-            # Predict probabilities
-            y_pred_train = model.predict_proba(X_train_fold)
-            y_pred_val = model.predict_proba(X_val_fold)
-            y_pred_test = model.predict_proba(X_test)
-
-            # Store true labels and probabilities for ROC curves
-            all_y_true["train"].append(y_train_fold)
-            all_y_true["validation"].append(y_val_fold)
-            all_y_true["test"].append(y_test)
-
-            all_y_proba["train"].append(y_pred_train[:, 1])
-            all_y_proba["validation"].append(y_pred_val[:, 1])
-            all_y_proba["test"].append(y_pred_test[:, 1])
-
-            # Calculate metrics
-            metrics = {
-                "train": self.compute_metrics(y_train_fold, y_pred_train),
-                "validation": self.compute_metrics(y_val_fold, y_pred_val),
-                "test": self.compute_metrics(y_test, y_pred_test),
+            predictions = {
+                "train": model.predict_proba(X_train_fold)[:, 1],
+                "validation": model.predict_proba(X_val_fold)[:, 1],
+                "test": model.predict_proba(X_test)[:, 1],
             }
-            for key, submetrics in metrics.items():
-                results[key].append(submetrics)
 
-        # Create ROC curve plots for train, validation, and test sets
-        roc_figures = self.plot_roc_curves(all_y_true, all_y_proba, k_folds)
+            for set_type, y_true in zip(
+                sets,
+                [y_train_fold, y_val_fold, y_test]
+                ):
 
-        # Log ROC plots to WandB
-        for dataset_type, fig in roc_figures.items():
-            wandb.log({f"roc_curve_{dataset_type}": wandb.Image(fig)})
-            plt.close(fig)
+                results[set_type].append(self.compute_metrics(y_true, predictions[set_type]))
 
-        # Mean and std of metrics
-        flat_metrics = {}
-        for key, submetrics in results.items():
-            mean_metrics = {f"{key}_{subkey}": np.mean([m[subkey] for m in submetrics]) for subkey in submetrics[0].keys()}
-            std_metrics = {f"{key}_{subkey}_std": np.std([m[subkey] for m in submetrics]) for subkey in submetrics[0].keys()}
-            flat_metrics.update(mean_metrics)
-            flat_metrics.update(std_metrics)
+                all_y_proba[set_type].append(predictions[set_type])
+                all_y_true[set_type].append(y_true)
 
 
-        # Log metrics
-        wandb.log(flat_metrics)
 
-        wandb.finish()
-        return flat_metrics
+        return results, all_y_true, all_y_proba
         
+
+    def evaluate(self, model, dataset: pd.DataFrame, description: str, group_name: str = 'test', k_folds=5, **kwargs):
+        """
+        Evaluate the specified model on the provided dataset.
+
+        Args:
+            model: Machine learning model or pipeline.
+            dataset (pd.DataFrame): Dataset to evaluate the model on.
+            description (str): Description of the evaluation run.
+            run_name (str, optional): Specific name for the WandB run.
+
+        Returns:
+            dict: Metrics logged to WandB.
+        """
+        group_name = f'{group_name}_{wandb.util.generate_id()}'
+        
+        for evaluation_type, datasets in WandbTrainer.CROSSVALIDATION_DATASETS.items():
+            all_results, all_y_true, all_y_proba = [], [], []
+
+            dataset_dict = {
+                f'{dataset_name}':{
+                    "size": len(dataset[dataset['dataset'] == dataset_name]),
+                    'positive_ratio': dataset[dataset['dataset'] == dataset_name]['label'].mean(),
+                    'negative_ratio': 1 - dataset[dataset['dataset'] == dataset_name]['label'].mean()
+                } 
+                for dataset_name in datasets
+            }
+
+
+            self._initialize_wandb_run(
+                    model, 
+                    dataset_dict, 
+                    group=group_name, 
+                    job_type=evaluation_type,
+                    description=description, 
+                    k_folds=k_folds, 
+                    **kwargs
+            )
+            
+            for test_dataset in datasets:
+                train_ds = dataset[(dataset['dataset'] != test_dataset) & (dataset['dataset'].isin(datasets))]
+                test_ds = dataset[dataset['dataset'] == test_dataset]
+
+                if train_ds.empty or test_ds.empty:
+                    print(f"Skipping {evaluation_type} {test_dataset} as it is not present in the dataset")
+                    continue
+
+                X_train, y_train, X_test, y_test= self._prepare_datasets(train_ds, test_ds)
+
+                results, y_true, y_proba = self.train_model_and_evaluate_kfold(
+                    model, 
+                    X_train, 
+                    y_train, 
+                    X_test, 
+                    y_test, 
+                    k_folds=k_folds
+                )
+
+                # Log metrics to WandB
+                flattened_results = {f"{set_type}_{metric}": [result[metric] for result in results[set_type]] for set_type in results for metric in results[set_type][0]}
+
+                all_results.append(flattened_results)
+                all_y_true.append(y_true)
+                all_y_proba.append(y_proba)
+
+            
+            # Mean+std of metrics
+
+            if not all_results:
+                print(f"No results for {evaluation_type}")
+                wandb.finish()
+                continue
+
+            mean = {f'{metric}_mean': np.mean([result[metric] for result in all_results]) for metric in all_results[0]}
+            std = {f'{metric}_std': np.std([result[metric] for result in all_results]) for metric in all_results[0]}
+
+            wandb.log({**mean, **std})
+
+
+            # merge all y_true and y_proba for plotting
+
+            all_y_true_dict = {set_type: [ y_true_dict[set_type] for y_true_dict in all_y_true] for set_type in all_y_true[0]}
+            all_y_proba_dict = {set_type: [ y_proba_dict[set_type] for y_proba_dict in all_y_proba] for set_type in all_y_proba[0]}
+
+            all_y_true_dict = {set_type: [ y_true for y_true_list in all_y_true_dict[set_type] for y_true in y_true_list] for set_type in all_y_true_dict}
+            all_y_proba_dict = {set_type: [ y_proba for y_proba_list in all_y_proba_dict[set_type] for y_proba in y_proba_list] for set_type in all_y_proba_dict}
+
+            roc_figures = self.plot_roc_curves(all_y_true_dict, all_y_proba_dict)
+            for set_type, roc_figure in roc_figures.items():
+                wandb.log({f'{set_type}_roc': wandb.Image(roc_figure)})
+
+            wandb.finish()
+            
+
+
