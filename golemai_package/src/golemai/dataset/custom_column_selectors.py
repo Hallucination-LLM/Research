@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(LOGGER_LEVEL)
 
 class JensenShannonSelector(BaseEstimator, TransformerMixin):
-    def __init__(self, n_features: int) -> None:
+    def __init__(self, n_features: int = 10) -> None:
         """
         Initialize the JensenShannonSelector.
 
@@ -35,7 +35,7 @@ class JensenShannonSelector(BaseEstimator, TransformerMixin):
             Tuple[pd.Series, pd.Series]: The probability vectors for positive and negative classes.
         """
 
-        logger.debu(f'get_prob_vec: {col = }, {target_col = }, {min_val = }, {max_val = }')
+        logger.debug(f'get_prob_vec: {col = }, {target_col = }, {min_val = }, {max_val = }')
 
         all_values = np.arange(min_val, max_val + 1)
         pos_val, neg_val = df[target_col].value_counts().index
@@ -95,6 +95,8 @@ class JensenShannonSelector(BaseEstimator, TransformerMixin):
         pos_probs, neg_probs = self.calculate_probabilities(binned_df, 'label', n_bins)
         js_divs = jensenshannon(pos_probs, neg_probs, axis=1)
 
+        print(categorical_cols)
+
         jensen_divs_df = pd.DataFrame(
             js_divs, 
             index=numerical_cols + categorical_cols, 
@@ -123,7 +125,7 @@ class JensenShannonSelector(BaseEstimator, TransformerMixin):
 
 
 class ProportionAggSelector(BaseEstimator, TransformerMixin):
-    def __init__(self, n_features: int, agg_func: str = 'median', keep_categorical: bool = True) -> None:
+    def __init__(self, n_features: int = 10, agg_func: str = 'median', keep_categorical: bool = True) -> None:
         """
         Initialize the ProportionAggSelector.
 
