@@ -17,7 +17,8 @@ START = args.start
 END = args.end
 
 EXP_NAME = 'gemma_att'
-DS_NAME = 'evaluated_df.parquet'
+ATT_DS_NAME = 'window_step_1__on_{examined_span_type}__all'
+DS_NAME = 'all_evaluated_df.parquet'
 
 llm_rg = LLMRespGen(
     df=None,
@@ -41,13 +42,36 @@ df_hallu = hallu_ext.prepare_hallucinated_df_info(exp_name=EXP_NAME)
 
 print(f'Prepared hallu df')
 
-hallu_df = hallu_ext.create_attension_dataset(
+hallu_ext.create_attension_dataset(
     examined_span_type='context',
     skip_first_n_tokens=8,
+    skip_last_n_tokens=2,
     n_first_tokens=None,
     window_size=8,
+    window_step=1,
+    valid_example_th=4,
     exp_name=EXP_NAME,
-    save_name=f'attension_{START}_{END}_df'
+    saving_name_params={
+        'att_ds_name': ATT_DS_NAME.format(examined_span_type='context'),
+        'start': START,
+        'end': END,
+    }
+)
+
+hallu_ext.create_attension_dataset(
+    examined_span_type='query',
+    skip_first_n_tokens=8,
+    skip_last_n_tokens=2,
+    n_first_tokens=None,
+    window_size=8,
+    window_step=1,
+    valid_example_th=4,
+    exp_name=EXP_NAME,
+    saving_name_params={
+        'att_ds_name': ATT_DS_NAME.format(examined_span_type='query'),
+        'start': START,
+        'end': END,
+    }
 )
 
 print(f'Prepared attention dataset')

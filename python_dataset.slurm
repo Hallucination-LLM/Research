@@ -8,9 +8,12 @@
 #SBATCH --partition=plgrid-gpu-a100
 #SBATCH --output=job-%j.out
 #SBATCH --error=job-%j.err
-# SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:1
 
 conda activate hallu
 
- 
-srun python ./scripts/get_dataset.py --start 750 --end 1000
+# Read command-line arguments
+START=$1
+END=$2
+
+srun python ./scripts/get_dataset.py --start $START --end $END
