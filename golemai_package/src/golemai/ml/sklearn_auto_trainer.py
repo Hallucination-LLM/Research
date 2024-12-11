@@ -6,15 +6,26 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 import pandas as pd
 import wandb.sklearn
 
-class WandbTrainer:
-    SEED = 42
-    CROSSVALIDATION_DATASETS = {
-        'LOOKBACK_LENS': ['nq', 'cnndm'],
-        'QA': ['nq', 'bioask', 'hotpotqa_en', 'hotpotqa_pl', 'polqa', 'poquad_v2'],
-        'SUM': ['cnndm', 'xsum'],
-    }
 
-    def __init__(self, project_name, api_token=None):
+CROSSVALIDATION_DATASETS = {
+    'LOOKBACK_LENS': {
+        'datasets': ['nq', 'cnndm'],
+        'log_separately': True
+    },  
+    'QA': {
+        'datasets': ['nq', 'bioask', 'hotpotqa_en', 'hotpotqa_pl', 'polqa', 'poquad_v2'],
+        'log_separately': False
+    },
+    'SUM': {
+        'datasets': ['cnndm', 'xsum'],
+        'log_separately': False
+    },
+}
+
+class SklearnAutoTrainer:
+
+
+    def __init__(self, project_name, api_token=None, seed=42, crossvalidation_datasets=None):
         """
         Initialize WandB Trainer.
 
@@ -23,6 +34,11 @@ class WandbTrainer:
             api_token (str, optional): WandB API token for authentication.
         """
         self.project_name = project_name
+        self.seed = seed
+
+        if not crossvalidation_datasets:
+            self.crossvalidation_datasets = CROSSVALIDATION_DATASETS
+
         if api_token:
             wandb.login(key=api_token)
 
@@ -72,6 +88,14 @@ class WandbTrainer:
             description (str): Description of the training run.
             run_name (str, optional): Specific name for the WandB run.
         """
+        model_name = None
+
+        if hasattr(model, 'named_steps'):
+            model_name = model.named_steps['model'].__class__.__name__
+
+        else:
+            model_name = model.__class__.__name__
+
         wandb.init(
             project=self.project_name,
             group=group,
@@ -83,6 +107,7 @@ class WandbTrainer:
                 "description": description,
                 **kwargs,
             },
+            tags=[model_name, job_type],
         )
 
     def plot_roc_curves(self, y_true_dict, y_proba_dict):
@@ -181,7 +206,7 @@ class WandbTrainer:
         all_y_true = {set_type: [] for set_type in sets}
         all_y_proba = {set_type: [] for set_type in sets}
 
-        kfold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=self.SEED)
+        kfold = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=self.seed)
 
         for train_index, val_index in kfold.split(X_train, y_train):
             X_train_fold, X_val_fold = X_train.iloc[train_index], X_train.iloc[val_index]
@@ -209,6 +234,59 @@ class WandbTrainer:
 
 
         return results, all_y_true, all_y_proba
+    
+    
+    def log_to_wandb(
+        self,
+        model,
+        dataset_dict: dict,
+        evaluation_type: str,
+        description: str,
+        all_results: list,
+        all_y_true: list,
+        all_y_proba: list,
+        df_all: pd.DataFrame,
+        df_merged: pd.DataFrame,
+        group_name: str = 'test',
+        k_folds=5,
+        **kwargs
+    ):
+
+        self._initialize_wandb_run(
+            model, 
+            dataset_dict, 
+            group=group_name, 
+            job_type=evaluation_type,
+            description=description, 
+            k_folds=k_folds, 
+            **kwargs
+        )
+
+        mean = {f'{metric}_mean': np.mean([result[metric] for result in all_results]) for metric in all_results[0]}
+        std = {f'{metric}_std': np.std([result[metric] for result in all_results]) for metric in all_results[0]}
+
+        wandb.log({**mean, **std})
+
+        # Log table to WandB
+        wandb.log({'metrics': wandb.Table(dataframe=df_all)})
+
+        wandb.log({'metrics_merged': wandb.Table(dataframe=df_merged)})
+
+
+        # merge all y_true and y_proba for plotting
+
+        all_y_true_dict = {set_type: [ y_true_dict[set_type] for y_true_dict in all_y_true] for set_type in all_y_true[0]}
+        all_y_proba_dict = {set_type: [ y_proba_dict[set_type] for y_proba_dict in all_y_proba] for set_type in all_y_proba[0]}
+
+        all_y_true_dict = {set_type: [ y_true for y_true_list in all_y_true_dict[set_type] for y_true in y_true_list] for set_type in all_y_true_dict}
+        all_y_proba_dict = {set_type: [ y_proba for y_proba_list in all_y_proba_dict[set_type] for y_proba in y_proba_list] for set_type in all_y_proba_dict}
+
+        roc_figures = self.plot_roc_curves(all_y_true_dict, all_y_proba_dict)
+        for set_type, roc_figure in roc_figures.items():
+            wandb.log({f'{set_type}_roc': wandb.Image(roc_figure)})
+
+        wandb.finish()
+
         
 
     def evaluate(self, model, dataset: pd.DataFrame, description: str, group_name: str = 'test', k_folds=5, **kwargs):
@@ -226,8 +304,12 @@ class WandbTrainer:
         """
         group_name = f'{group_name}_{wandb.util.generate_id()}'
         
-        for evaluation_type, datasets in WandbTrainer.CROSSVALIDATION_DATASETS.items():
+        for evaluation_type, info in self.crossvalidation_datasets.items():
             all_results, all_y_true, all_y_proba = [], [], []
+            df_all, df_merged = pd.DataFrame(), pd.DataFrame()
+
+            datasets = info['datasets']
+            log_separately = info['log_separately']
 
             dataset_dict = {
                 f'{dataset_name}':{
@@ -238,18 +320,13 @@ class WandbTrainer:
                 for dataset_name in datasets
             }
 
-
-            self._initialize_wandb_run(
-                    model, 
-                    dataset_dict, 
-                    group=group_name, 
-                    job_type=evaluation_type,
-                    description=description, 
-                    k_folds=k_folds, 
-                    **kwargs
-            )
             
             for test_dataset in datasets:
+
+                if log_separately:
+                    all_results, all_y_true, all_y_proba = [], [], []
+                    df_all, df_merged = pd.DataFrame(), pd.DataFrame()
+
                 train_ds = dataset[(dataset['dataset'] != test_dataset) & (dataset['dataset'].isin(datasets))]
                 test_ds = dataset[dataset['dataset'] == test_dataset]
 
@@ -271,37 +348,77 @@ class WandbTrainer:
                 # Log metrics to WandB
                 flattened_results = {f"{set_type}_{metric}": [result[metric] for result in results[set_type]] for set_type in results for metric in results[set_type][0]}
 
+                df = pd.DataFrame(flattened_results)
+                df['fold'] = df.index % k_folds
+                df['evaluation_type'] = evaluation_type
+                df['test_dataset'] = test_dataset
+
+               # Separate numeric and non-numeric columns
+                numeric_cols = df.select_dtypes(include=['number']).columns
+                numeric_cols = numeric_cols.drop('fold')
+
+                # Calculate mean and standard deviation for numeric columns only
+                mean = df[numeric_cols].mean()
+                std = df[numeric_cols].std()
+
+                # Create rows for mean and std
+                merged_row = {
+                    'evaluation_type': evaluation_type,
+                    'test_dataset': test_dataset,
+                    **{f'{col}_mean': mean[col] for col in numeric_cols},
+                    **{f'{col}_std': std[col] for col in numeric_cols}
+                }
+          
+                df_merged = pd.concat([df_merged, pd.DataFrame([merged_row])], ignore_index=True)
+
+                # Reorder columns to bring 'fold', 'evaluation_type', and 'test_dataset' to the front
+                column_order = ['fold', 'evaluation_type', 'test_dataset'] +\
+                            [col for col in df.columns if col not in ['fold', 'evaluation_type', 'test_dataset']]
+                df = df[column_order]
+
+                df_all = pd.concat([df_all, df])
+
                 all_results.append(flattened_results)
                 all_y_true.append(y_true)
                 all_y_proba.append(y_proba)
 
+                if log_separately and all_results:
+                    self.log_to_wandb(
+                        model=model,
+                        dataset_dict=dataset_dict,
+                        evaluation_type=f'{evaluation_type}_{test_dataset}',
+                        description=description,
+                        all_results=all_results,
+                        all_y_true=all_y_true,
+                        all_y_proba=all_y_proba,
+                        df_all=df_all,
+                        df_merged=df_merged,
+                        group_name=group_name,
+                        k_folds=k_folds,
+                        **kwargs
+                    )
+                elif not all_results:
+                    print(f"Skipping {evaluation_type}_{test_dataset} as no results were generated") 
+
             
-            # Mean+std of metrics
 
-            if not all_results:
-                print(f"No results for {evaluation_type}")
-                wandb.finish()
-                continue
+            if not log_separately and all_results:
+                self.log_to_wandb(
+                    model=model,
+                    dataset_dict=dataset_dict,
+                    evaluation_type=evaluation_type,
+                    description=description,
+                    all_results=all_results,
+                    all_y_true=all_y_true,
+                    all_y_proba=all_y_proba,
+                    df_all=df_all,
+                    df_merged=df_merged,
+                    group_name=group_name,
+                    k_folds=k_folds,
+                    **kwargs
+                )
+            elif not all_results:
+                print(f"Skipping {evaluation_type} as no results were generated")
 
-            mean = {f'{metric}_mean': np.mean([result[metric] for result in all_results]) for metric in all_results[0]}
-            std = {f'{metric}_std': np.std([result[metric] for result in all_results]) for metric in all_results[0]}
-
-            wandb.log({**mean, **std})
-
-
-            # merge all y_true and y_proba for plotting
-
-            all_y_true_dict = {set_type: [ y_true_dict[set_type] for y_true_dict in all_y_true] for set_type in all_y_true[0]}
-            all_y_proba_dict = {set_type: [ y_proba_dict[set_type] for y_proba_dict in all_y_proba] for set_type in all_y_proba[0]}
-
-            all_y_true_dict = {set_type: [ y_true for y_true_list in all_y_true_dict[set_type] for y_true in y_true_list] for set_type in all_y_true_dict}
-            all_y_proba_dict = {set_type: [ y_proba for y_proba_list in all_y_proba_dict[set_type] for y_proba in y_proba_list] for set_type in all_y_proba_dict}
-
-            roc_figures = self.plot_roc_curves(all_y_true_dict, all_y_proba_dict)
-            for set_type, roc_figure in roc_figures.items():
-                wandb.log({f'{set_type}_roc': wandb.Image(roc_figure)})
-
-            wandb.finish()
-            
 
 
