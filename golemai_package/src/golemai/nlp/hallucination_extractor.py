@@ -90,7 +90,7 @@ class HallucinationDatasetExtractor:
             self.df[col_name] = col_values
 
         # if problem comment out the following line
-        self.df.to_parquet(os.path.join(exp_name, 'hallu_df_info.parquet'))
+        # self.df.to_parquet(os.path.join(exp_name, 'hallu_df_info.parquet'))
         return self.df
     
     def _setup(self):
@@ -467,6 +467,7 @@ class HallucinationDatasetExtractor:
             att_file_type: str = 'npy',
             save_to_disk: bool = True,
             saving_name_params: dict = {
+                'path': None,
                 'att_ds_name': 'att_ds',
                 'start': 0,
                 'end': None
@@ -501,7 +502,11 @@ class HallucinationDatasetExtractor:
 
         if save_to_disk:
 
-            dest_path = os.path.join(exp_name, saving_name_params.get('att_ds_name', 'att_ds'))
+            dest_path = os.path.join(
+                saving_name_params.get('path', '.'),
+                exp_name, 
+                saving_name_params.get('att_ds_name', 'att_ds')
+            )
 
             if not os.path.exists(dest_path):
                 os.makedirs(dest_path)
