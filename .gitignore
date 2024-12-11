@@ -27,5 +27,6 @@ scripts/t.ipynb
 
 
 temp/
-
+logs/
 wandb
+
