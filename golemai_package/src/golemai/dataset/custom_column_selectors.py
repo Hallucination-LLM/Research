@@ -83,7 +83,7 @@ class JensenShannonSelector(BaseEstimator, TransformerMixin):
 
         logger.info(f'fit: {X.shape = }, {y.shape = }')
 
-        X.dropna(inplace=True)
+        X = X.dropna()
         categorical_cols = X.select_dtypes(include=['object', 'category']).columns.to_list()
         numerical_cols = X.select_dtypes(exclude=['object', 'category']).columns.to_list()
 
@@ -94,8 +94,6 @@ class JensenShannonSelector(BaseEstimator, TransformerMixin):
 
         pos_probs, neg_probs = self.calculate_probabilities(binned_df, 'label', n_bins)
         js_divs = jensenshannon(pos_probs, neg_probs, axis=1)
-
-        print(categorical_cols)
 
         jensen_divs_df = pd.DataFrame(
             js_divs, 
@@ -140,7 +138,10 @@ class ProportionAggSelector(BaseEstimator, TransformerMixin):
         self.selected_features_: list | None = None
 
     def _get_grouped_stats(
-        self, X: pd.DataFrame, numerical_cols: list[str]
+        self, 
+        X: pd.DataFrame,
+        y: pd.Series,
+        numerical_cols: list[str]
     ) -> pd.DataFrame:
         
         """
@@ -148,13 +149,14 @@ class ProportionAggSelector(BaseEstimator, TransformerMixin):
 
         Args:
             X (pd.DataFrame): The input DataFrame.
+            y (pd.Series): The target labels.
             numerical_cols (list[str]): The numerical columns.
 
         Returns:
             pd.DataFrame: The grouped statistics.
         """
         
-        stats_grouped = X[numerical_cols].groupby('label').agg([self.agg_func]).T
+        stats_grouped = X[numerical_cols].groupby(y).agg([self.agg_func]).T
         stats_grouped['proportion'] = stats_grouped[0] / stats_grouped[1]
         stats_grouped = stats_grouped.reset_index().rename(columns={'level_0': 'feature', 'level_1': 'statistic'})
 
@@ -174,15 +176,15 @@ class ProportionAggSelector(BaseEstimator, TransformerMixin):
 
         logger.info(f'fit: {X.shape = }, {y.shape = }')
 
-        X['label'] = y.values
+        # X['label'] = y.values
 
         numerical_cols = X.select_dtypes(exclude=['object', 'category']).columns.to_list()
         categorical_cols = X.select_dtypes(include=['object', 'category']).columns.to_list()
 
-        stats_grouped = self._get_grouped_stats(X, numerical_cols)
+        stats_grouped = self._get_grouped_stats(X, y, numerical_cols)
 
-        top_features = stats_grouped.nlargest(self.n_features // 2, 'proportion')['feature'].values.tolist()
-        bottom_features = stats_grouped.nsmallest(self.n_features // 2, 'proportion')['feature'].values.tolist()
+        top_features = stats_grouped.sort_values('proportion', ascending=False).head(self.n_features)['feature'].values.tolist()
+        bottom_features = stats_grouped.sort_values('proportion', ascending=True).head(self.n_features)['feature'].values.tolist()
         
         self.selected_features_ = top_features + bottom_features
         
