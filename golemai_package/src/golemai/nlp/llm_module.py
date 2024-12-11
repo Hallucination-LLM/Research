@@ -66,7 +66,11 @@ def load_model(
 
         logger.debug(f"Using transformers library")
 
-        tokenizer = transformers.AutoTokenizer.from_pretrained(model_id)
+        tokenizer = transformers.AutoTokenizer.from_pretrained(model_id, use_auth_token=kwargs.get("token"))
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
         model = transformers.AutoModelForCausalLM.from_pretrained(
             model_id,
             device_map=device_map,
