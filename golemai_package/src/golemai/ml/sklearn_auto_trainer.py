@@ -8,7 +8,7 @@ import wandb.sklearn
 
 
 CROSSVALIDATION_DATASETS = {
-    'LOOKBACK_LENS': {
+    'LL': {
         'datasets': ['nq', 'cnndm'],
         'log_separately': True
     },  
@@ -96,18 +96,27 @@ class SklearnAutoTrainer:
         else:
             model_name = model.__class__.__name__
 
+        tags = [model_name, job_type]
+
+        if 'span_type' in kwargs:
+            tags.append(kwargs['span_type'])
+
+        if 'base_model' in kwargs:
+            tags.append(kwargs['base_model'])
+
         wandb.init(
             project=self.project_name,
             group=group,
             job_type=job_type,
-            name=f'{group}_{job_type}_{wandb.util.generate_id()}',
+            # name=f'{group}_{job_type}_{wandb.util.generate_id()}',
+            name=f'{group}_{job_type}',
             config={
                 **model.get_params(),
                 "dataset_description": dataset_dict,
                 "description": description,
                 **kwargs,
             },
-            tags=[model_name, job_type],
+            tags=tags,
         )
 
     def plot_roc_curves(self, y_true_dict, y_proba_dict):
@@ -302,7 +311,8 @@ class SklearnAutoTrainer:
         Returns:
             dict: Metrics logged to WandB.
         """
-        group_name = f'{group_name}_{wandb.util.generate_id()}'
+        # group_name = f'{group_name}_{wandb.util.generate_id()}'
+        group_name = f'{group_name}'
         
         for evaluation_type, info in self.crossvalidation_datasets.items():
             all_results, all_y_true, all_y_proba = [], [], []
