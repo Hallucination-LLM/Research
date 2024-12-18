@@ -175,7 +175,7 @@ class HallucinationDatasetExtractor:
         for idx, (start, end) in enumerate(offset_mapping):
 
             for hallu_start, hallu_end in hallu_indices:
-                if start >= hallu_start and end <= hallu_end:
+                if (start < hallu_start and end > hallu_start) or (start >= hallu_start and end <= hallu_end) or (start < hallu_end and end > hallu_end):
                     hallu_tokens[idx] = 1
 
         return hallu_tokens
