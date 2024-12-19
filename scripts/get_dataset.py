@@ -8,7 +8,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 from golemai.nlp.llm_resp_gen import LLMRespGen
 from golemai.nlp.hallucination_extractor import HallucinationDatasetExtractor
 from golemai.nlp.prompts import SYSTEM_MSG_RAG_SHORT, QUERY_INTRO_NO_ANS
-from agg_att_funcs import agg_att_weighted
+from agg_att_funcs import agg_att_weighted, weighted_avg_window_att
 import pandas as pd
 import torch
 import sys
@@ -25,7 +25,7 @@ END = args.end
 MODEL_ID = args.model_id
 
 EXP_NAME = 'llama2_pure'
-ATT_DS_NAME = 'window_step_1__on_{examined_span_type}__all__agg_weighted'
+ATT_DS_NAME = 'jensen_att__on_{examined_span_type}__nq_cndmn'
 DS_NAME = 'evaluated_df_no_bioask.parquet'
 
 HALLU_PATH = '/net/pr2/projects/plgrid/plggllmhallu/hallu/llama2_resps/'
@@ -38,13 +38,15 @@ llm_rg = LLMRespGen(
     prompt_template=QUERY_INTRO_NO_ANS,
 )
 
-llm_rg.load_llm(
-    model_id=MODEL_ID,
-    use_unsloth=False, 
-    dtype=torch.bfloat16,
-    token=os.environ.get('HF_TOKEN'),
-    load_in_4bit=True
-)
+llm_rg.model_id = MODEL_ID
+
+# llm_rg.load_llm(
+#     model_id=MODEL_ID,
+#     use_unsloth=False, 
+#     dtype=torch.bfloat16,
+#     token=os.environ.get('HF_TOKEN'),
+#     load_in_4bit=True
+# )
 
 df = pd.read_parquet(os.path.join(HALLU_PATH, EXP_NAME, DS_NAME)).iloc[slice(START, END)]
 
@@ -73,8 +75,8 @@ hallu_ext.create_attension_dataset(
         'start': START,
         'end': END,
     },
-    agg_func=agg_att_weighted,
-    use_passage_percentage=True,
+    agg_func=weighted_avg_window_att,
+    use_passage_percentage=False,
     passage_perc_round=4
 )
 
