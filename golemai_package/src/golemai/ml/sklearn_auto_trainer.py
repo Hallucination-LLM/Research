@@ -108,8 +108,8 @@ class SklearnAutoTrainer:
             project=self.project_name,
             group=group,
             job_type=job_type,
-            # name=f'{group}_{job_type}_{wandb.util.generate_id()}',
-            name=f'{group}_{job_type}',
+            name=f'{group}_{job_type}_{wandb.util.generate_id()}',
+            # name=f'{group}_{job_type}',
             config={
                 **model.get_params(),
                 "dataset_description": dataset_dict,

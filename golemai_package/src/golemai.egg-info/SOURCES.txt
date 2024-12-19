@@ -7,6 +7,7 @@ src/golemai.egg-info/SOURCES.txt
 src/golemai.egg-info/dependency_links.txt
 src/golemai.egg-info/top_level.txt
 src/golemai/dataset/__init__.py
+src/golemai/dataset/custom_column_selectors.py
 src/golemai/dataset/dataset_ops.py
 src/golemai/dl/__init__.py
 src/golemai/dl/autoencoder.py
@@ -16,6 +17,7 @@ src/golemai/logging/__init__.py
 src/golemai/logging/log_formater.py
 src/golemai/ml/__init__.py
 src/golemai/ml/metrics_ops.py
+src/golemai/ml/sklearn_auto_trainer.py
 src/golemai/ml/train_ops.py
 src/golemai/mlflow/__init__.py
 src/golemai/mlflow/mlflow_ops.py
