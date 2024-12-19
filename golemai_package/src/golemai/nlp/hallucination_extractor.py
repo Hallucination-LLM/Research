@@ -280,6 +280,8 @@ class HallucinationDatasetExtractor:
         postprocess_fn: callable = None,
         valid_example_th: int = 4,
         use_passage_percentage: bool = False,
+        n_prompt_tokens: int = None,
+        passage_perc_round: int = 4,
         **kwargs: dict,
     ) -> np.ndarray:
         """
@@ -291,12 +293,12 @@ class HallucinationDatasetExtractor:
 
         skip_first_n_tokens = skip_first_n_tokens if skip_first_n_tokens is not None else 0
         skip_last_n_tokens = skip_last_n_tokens if skip_last_n_tokens is not None else 0
-        n_first_tokens = n_first_tokens if n_first_tokens is not None else att_tensor.shape[-2]
+        n_first_tokens = n_first_tokens if n_first_tokens is not None else att_tensor.shape[-2] - skip_first_n_tokens
 
         passage_length = n_passage_tokens_end_idx - n_passage_tokens_start_idx
 
-        if kwargs.get('n_prompt_tokens') is None:
-            kwargs['n_prompt_tokens'] = att_tensor.shape[-1] - att_tensor.shape[-2] 
+        if n_prompt_tokens is None:
+            n_prompt_tokens = att_tensor.shape[-1] - att_tensor.shape[-2] 
 
         n_context_tokens = deepcopy(att_tensor.shape[-1])
 
@@ -305,11 +307,7 @@ class HallucinationDatasetExtractor:
         if att_tensor.shape[-2] < valid_example_th:
             return None
         
-        print(f"{att_tensor.shape = }")
-
         if (window_size) and (att_tensor.shape[-2] > window_size):
-
-            print(f"Using windowed attention with window size: {window_size} and step: {window_step}")
 
             att_tensor = HallucinationDatasetExtractor.get_windowed_att_tensor(
                 att_tensor=att_tensor,
@@ -318,15 +316,17 @@ class HallucinationDatasetExtractor:
                 postprocess_fn=postprocess_fn,
                 passage_length=passage_length,
                 use_passage_percentage=use_passage_percentage,
+                n_prompt_tokens=n_prompt_tokens,
+                passage_perc_round=passage_perc_round,
                 **kwargs,
             )
 
         else:
 
             if use_passage_percentage:
-                kwargs['passage_percentage'] = round(passage_length / (n_context_tokens), kwargs.get('passage_perc_round', 3))
+                kwargs['passage_percentage'] = round(passage_length / (n_context_tokens), passage_perc_round)
                 kwargs['window_size'] = att_tensor.shape[-2]
-
+            
             att_tensor = postprocess_fn(att_tensor, **kwargs)
 
         return att_tensor
@@ -350,8 +350,8 @@ class HallucinationDatasetExtractor:
         att_file = f"{idx}.npy"
         print(f"att_file: {att_file}")
 
-        n_context_tokens_start_idx = row.get(f'{examined_span_type}_start_idx', None)
-        n_context_tokens_end_idx = row.get(f'{examined_span_type}_end_idx', None)
+        n_passage_tokens_start_idx = row.get(f'{examined_span_type}_start_idx', None)
+        n_passage_tokens_end_idx = row.get(f'{examined_span_type}_end_idx', None)
 
         att_file_path = os.path.join(att_path, att_file)
 
@@ -362,8 +362,8 @@ class HallucinationDatasetExtractor:
                 n_first_tokens=n_first_tokens,
                 skip_first_n_tokens=skip_first_n_tokens,
                 skip_last_n_tokens=skip_last_n_tokens,
-                n_context_tokens_start_idx=n_context_tokens_start_idx,
-                n_context_tokens_end_idx=n_context_tokens_end_idx,
+                n_passage_tokens_start_idx=n_passage_tokens_start_idx,
+                n_passage_tokens_end_idx=n_passage_tokens_end_idx,
                 postprocess_fn=postprocess_fn,
                 window_size=window_size,
                 window_step=window_step,
@@ -387,6 +387,8 @@ class HallucinationDatasetExtractor:
             agg_func: callable = None,
             window_step: int = 4,
             valid_example_th: int = 4,
+            use_passage_percentage: bool = False,
+            **kwargs: dict,
         ):
         
         X, errors, not_valid = {}, [], []
@@ -407,7 +409,9 @@ class HallucinationDatasetExtractor:
                     n_first_tokens=n_first_tokens,
                     window_step=window_step,
                     valid_example_th=valid_example_th,
+                    use_passage_percentage=use_passage_percentage,
                     n_prompt_tokens=row.get('n_prompt_tokens', None),
+                    **kwargs,
                     
                 )
                 for idx, row in self.df.iterrows()
@@ -510,6 +514,7 @@ class HallucinationDatasetExtractor:
         df = pd.DataFrame(X.reshape(X.shape[0], -1))
         df[label_column] = Y.tolist()
         df['dataset'] = dataset_names
+        df['example_name'] = sorted_x_keys
 
         return df
 
@@ -531,7 +536,9 @@ class HallucinationDatasetExtractor:
             window_size: int = 0,
             window_step: int = 4,
             valid_example_th: int = 4,
-            agg_func: callable = None
+            agg_func: callable = None,
+            use_passage_percentage: bool = False,
+            **kwargs: dict,
             ):
         
         if agg_func is None:
@@ -546,7 +553,9 @@ class HallucinationDatasetExtractor:
             window_size=window_size,
             agg_func=agg_func,
             window_step=window_step,
-            valid_example_th=valid_example_th
+            valid_example_th=valid_example_th,
+            use_passage_percentage=use_passage_percentage,
+            **kwargs,
         )
 
         Y = self.prepare_hallu_labels(X, n_first_tokens=n_first_tokens, att_file_type=att_file_type)

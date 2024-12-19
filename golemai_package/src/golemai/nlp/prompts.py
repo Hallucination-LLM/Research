@@ -14,6 +14,17 @@ QUERY_INTRO_NO_ANS = """Given the context `CONTEXT` and the query `QUERY` below,
     `ANSWER`:
 """
 
+SYSTEM_MSG_QA = """
+    You are a helpful assistant. Your job will be to answer questions accurately based on your internal knowledge.
+    Give only the answer to the question - it should be concise and to the point.
+"""
+
+QUERY_NO_CONTEXT = """Given the query `QUERY` below, please provide an answer `ANSWER` to the question. 
+    `QUERY`: {query}
+
+    `ANSWER`:
+"""
+
 QUERY_INTRO_FEWSHOT = """Given the context `CONTEXT` and the query `QUERY` below, please provide
   an answer `ANSWER` to the question. Three examples are provided below.
 

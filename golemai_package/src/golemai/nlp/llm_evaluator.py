@@ -61,7 +61,7 @@ class LLMEvaluator(LLMRespGen):
 
         return result, cost, prompt
     
-    def evaluate(self, df, exp_name, responses, row_start, row_end, checkpoint_dir: str = 'checkpoints'):
+    def evaluate(self, df, exp_name, responses, row_start, row_end, checkpoint_dir: str = 'checkpoints', checkpoint_file: str = None):
         df_eval = df.copy()
         df_eval = df_eval.loc[df_eval[self.id_col].isin(list(responses.keys()))]
         df_eval[exp_name] = df_eval[self.id_col].map(responses)
@@ -75,8 +75,9 @@ class LLMEvaluator(LLMRespGen):
         self.result_path = os.path.join(
             exp_name, 
             checkpoint_dir,
-            f'evaluated_{row_start}_{row_end}.json'
-            )
+            f'{exp_name}_{row_start}_{row_end}_evaluated_{datetime.now():%Y-%m-%d_%H-%M-%S}.json' if checkpoint_file is None else checkpoint_file
+        )
+
         results, total_cost, accuracy = self.evaluate_from_dfs(
             df_eval, responses
         )
@@ -131,10 +132,16 @@ class LLMEvaluator(LLMRespGen):
 
                 total_cost += cost
 
-                if self.use_pydantic:
-                    correct_count += result.decision == IsAnswerCorrect.TRUE
+                if result.decision is not None:
+
+                    if self.use_pydantic:
+                        correct_count += result.decision == IsAnswerCorrect.TRUE
+                    else:
+                        correct_count += result.decision
+
                 else:
-                    correct_count += result.decision
+                    logger.error(f"Decision not found for {idx}")
+                    correct_count += 0
 
         accuracy = correct_count / len(results) if len(results) else 0
 
@@ -156,9 +163,16 @@ class LLMEvaluator(LLMRespGen):
 
         # Extract problematic spans
         if "Problematic Spans:" in response_text:
-            spans_text = response_text.split("Problematic Spans: ")[1].split("Conclusion:")[0].strip()
-            if '**' in spans_text:
-                spans_text = spans_text.split('**')[0].strip()
+            
+            try:
+                spans_text = response_text.split("Problematic Spans: ")[1].split("Conclusion:")[0].strip()
+
+                if '**' in spans_text:
+                    spans_text = spans_text.split('**')[0].strip()
+
+            except IndexError:
+                logger.error("Error extracting problematic spans")
+
             # Safely parse the list of spans
             try:
                 problematic_spans = ast.literal_eval(spans_text)

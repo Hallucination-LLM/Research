@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import argparse
+import json
 
 if __name__ == '__main__':
 
@@ -11,8 +12,10 @@ if __name__ == '__main__':
     parser.add_argument("--start", type=int, default=0)
     parser.add_argument("--end", type=int, default=None)
     parser.add_argument("--checkpoint_file", type=str, default=None)
+    parser.add_argument("--checkpoint_file_eval", type=str, default=None)
     parser.add_argument("--exp_name", type=str, default=None)
     parser.add_argument("--return_dict_in_gen", action='store_true', default=False)
+    parser.add_argument("--model_id", type=str, default='gemma-2-9b-it-bnb-4bit')
 
     args = parser.parse_args()
 
@@ -22,10 +25,10 @@ if __name__ == '__main__':
     END = args.end
     DEVICE_NUM = args.device_num
     CHECKPOINT_FILE = args.checkpoint_file
+    CHECKPOINT_FILE_EVAL = args.checkpoint_file_eval
     EXP_NAME = args.exp_name
     RETURN_DICT_IN_GEN = args.return_dict_in_gen
-
-    MODEL_ID = 'gemma-2-9b-it-bnb-4bit'
+    MODEL_ID = args.model_id
 
     if DEVICE_NUM != 'auto':
         os.environ["CUDA_VISIBLE_DEVICES"] = f"{DEVICE_NUM}"
@@ -49,24 +52,24 @@ if __name__ == '__main__':
 
     df = pd.read_parquet(os.path.join(REPO_DIR, DATA_DIR, DS_NAME)).reset_index(drop=True)
 
-    llm_rg = LLMRespGen(
-        df=df,
-        id_col='id',
-        model_type='api',
-        api_url='<>',
-        api_key='<>',
-        system_msg=SYSTEM_MSG_RAG_SHORT,
-        prompt_template=QUERY_INTRO_NO_ANS if not FEWSHOT else QUERY_INTRO_FEWSHOT,
-        batch_size=1,
-        device_num=DEVICE_NUM
-    )
+    # llm_rg = LLMRespGen(
+    #     df=df,
+    #     id_col='id',
+    #     model_type='api',
+    #     api_url='<>',
+    #     api_key='<>',
+    #     system_msg=SYSTEM_MSG_RAG_SHORT,
+    #     prompt_template=QUERY_INTRO_NO_ANS if not FEWSHOT else QUERY_INTRO_FEWSHOT,
+    #     batch_size=1,
+    #     device_num=DEVICE_NUM
+    # )
 
-    if CHECKPOINT_FILE is not None:
+    # if CHECKPOINT_FILE is not None:
 
-        llm_rg.configure_checkpoint(
-            checkpoint_path=os.path.join(EXP_NAME, "checkpoints", CHECKPOINT_FILE),
-            checkpoint_freq=2
-        )
+    #     llm_rg.configure_checkpoint(
+    #         checkpoint_path=os.path.join(EXP_NAME, "checkpoints", CHECKPOINT_FILE),
+    #         checkpoint_freq=2
+    #     )
 
     # llm_rg.load_llm(use_unsloth=False, dtype=torch.bfloat16)
 
@@ -93,19 +96,22 @@ if __name__ == '__main__':
     #     take_only_generated=True
     # )
 
-    llm_rg.df = llm_rg.df.rename(columns={'question': 'query'})
+    df = df.rename(columns={'question': 'query'})
 
-    resps = llm_rg.get_responses(
-        eval_run_name=EXP_NAME,
-        prompt_columns=['query', 'context'],
-        row_start=START,
-        row_end=END,
-        max_prompt_length_col='context_length',
-        max_prompt_length=3996
-    )
+    # resps = llm_rg.get_responses(
+    #     eval_run_name=EXP_NAME,
+    #     prompt_columns=['query', 'context'],
+    #     row_start=START,
+    #     row_end=END,
+    #     max_prompt_length_col='context_length',
+    #     max_prompt_length=3996
+    # )
 
-    resps = resps['model_responses']
-    print(resps)
+    # resps = resps['model_responses']
+    # print(resps)
+
+    with open(os.path.join(EXP_NAME, 'checkpoints', CHECKPOINT_FILE), 'r') as f:
+        resps = json.load(f).get('model_responses')
 
     api_key = os.getenv("OPENAI_API_KEY")
 
@@ -127,6 +133,9 @@ if __name__ == '__main__':
         df=df,
         exp_name=EXP_NAME if EXP_NAME is not None else f'{MODEL_ID}_eval_{datetime.now().strftime("%Y-%m-%d_%H-%M")}',
         responses=resps,
+        row_start=START,
+        row_end=END,
+        checkpoint_file=CHECKPOINT_FILE_EVAL
     )
 
     print(df.head())
